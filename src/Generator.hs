@@ -258,8 +258,8 @@ pPrefLineEnvironment defs@Definitions{prefLineEnvs, envs} ind = do
             let pPref = indentGuard sc EQ (incIndent ind) *> string (pref <> " ")
             pPref
             let pEl = do
-                pos'' <- indentLevel
-                DocEnvironment env <$> pElements defs  pos''
+                    pos'' <- indentLevel
+                    DocEnvironment env <$> pElements defs  pos''
             els <- pEl `sepBy` try pPref
             case sep of
                 Nothing -> return els

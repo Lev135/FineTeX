@@ -1,9 +1,6 @@
-Для запуска в интерпретаторе `ghci` выполните 
 
-``
-    :l main 
-``
-
-``
-    processFile "tests/nibergall.ttex" "tests/nibergal.tex"
-``
+```
+    cabal new-repl
+    :l Main
+    processFile "examples/nibergall.ttex" "examples/nibergall.tex"
+```

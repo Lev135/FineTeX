@@ -38,4 +38,4 @@ test p n str= do
         Left  e   -> putStrLn e
         Right des -> printErr $ parseAll (p (processDefs des) (mkPos n)) str
 
-main = undefined
+main = putStrLn "Hello, world!"
