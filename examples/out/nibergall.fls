@@ -1,8 +1,8 @@
-PWD d:/dvorkin_lev/Haskell/LaTeX-generator/tests
+PWD d:/dvorkin_lev/Haskell/LaTeX-generator/examples
 INPUT c:/texlive/2021/texmf.cnf
 INPUT c:/texlive/2021/texmf-dist/web2c/texmf.cnf
 INPUT c:/texlive/2021/texmf-var/web2c/pdftex/pdflatex.fmt
-INPUT d:/dvorkin_lev/Haskell/LaTeX-generator/tests/nibergall.tex
+INPUT d:/dvorkin_lev/Haskell/LaTeX-generator/examples/nibergall.tex
 OUTPUT out/nibergall.log
 INPUT c:/texlive/2021/texmf-dist/tex/latex/base/article.cls
 INPUT c:/texlive/2021/texmf-dist/tex/latex/base/article.cls

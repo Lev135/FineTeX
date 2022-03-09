@@ -1,0 +1,50 @@
+@Define
+  @Environments
+    Document       = @TeX "document"
+    Equation       = @TeX "equation" @Math
+    AlignS         = @TeX "align*"   @Math 
+    Itemize        = @TeX "itemize"
+    Enumerate      = @TeX "enumerate"
+    AlignS-item    = ""       ""  
+    Itemize-item   = "\item " ""  
+    Enumerate-item = "\item " ""
+  @Prefs
+    >              = AlignS-item    @Group AlignS     @Sep "\\"
+    -              = Itemize-item   @Group Itemize
+    #              = Enumerate-item @Group Enumerate
+  @MathCommands
+    "<="           = "\leq"
+    ">="           = "\geq"
+    "!="           = "\neq"
+  @Environments
+    Lemma       = @TeX "lemma"
+    Proof       = @TeX "proof"
+    Proposition = @TeX "proposition"
+    Corollary   = @TeX "corollary"
+  @MathCommands
+    "<>"           =  "\Diamond" 
+    "<0>"          =  "\Diamond_0"
+    "<1>"          =  "\Diamond_1"
+    "<*>"          =  "\Diamond_*"
+    "<t>"          =  "\overline{\Diamond}"
+    "<a>"          =  "\Diamond_a"
+    "<b>"          =  "\Diamond_b"
+    "<x>"          =  "\Diamond_\star"
+    "[]"           =  "\Box"
+    "[0]"          =  "\Box_0"
+    "[1]"          =  "\Box_1"
+    "[*]"          =  "\Box_*"
+    "[t]"          =  "\overline{\Box}"
+    "[a]"          =  "\Box_a"
+    "[b]"          =  "\Box_b"
+    "->"           =  "\rightarrow"
+    "<->"          =  "\leftrightarrow"
+    "|-"           =  "\vdash"
+    "|="           =  "\Vdash"
+    "\/"           =  "\vee"
+    "/\"           =  "\wedge"
+    "~"            =  "\neg"
+    
+Some Text
+  - Some
+  - List

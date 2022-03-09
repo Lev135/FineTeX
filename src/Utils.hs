@@ -2,8 +2,15 @@
 module Utils where
 import Data.Maybe (mapMaybe, maybeToList)
 import Control.Applicative (Alternative ((<|>), many))
+import Control.Monad.Fail (MonadFail)
 
 
+-- | Convert a 'Maybe' value to a value in any monad
+failMsg :: MonadFail m => Maybe a -> String -> m a 
+failMsg Nothing err = fail err
+failMsg (Just x) _  = return x
+
+infix 4 `failMsg`
 
 -- | Update the second component of a pair.
 --

@@ -5,21 +5,21 @@
 
 module Generator where
 
-import Utils
+import Utils ( sepBy_, failMsg )
 
-import Text.Megaparsec(Parsec, MonadParsec (takeWhileP, label, takeWhile1P, try, notFollowedBy, lookAhead, eof), Pos, sepBy1, sepBy, unPos, (<?>), choice, optional, parse, errorBundlePretty, mkPos)
+import Text.Megaparsec(Parsec, MonadParsec (takeWhileP, label, takeWhile1P, try, notFollowedBy, lookAhead, eof), Pos, sepBy1, sepBy, unPos, (<?>), choice, optional, parse, errorBundlePretty, mkPos, satisfy)
 import Text.Megaparsec.Char ( char, space1, newline, letterChar, string )
-import Text.Megaparsec.Debug
 import qualified Text.Megaparsec.Char.Lexer as L
+import Text.Megaparsec.Char.Lexer (indentGuard)
+
 import Data.Void(Void)
-import Data.Text (Text, intercalate, replace, pack, unpack)
+import Data.Text (Text, pack, unpack)
 import qualified Data.Text as T
 import Control.Monad (void, when, unless)
 import Control.Applicative ( Alternative(empty, (<|>), some, many) )
-import Text.Megaparsec.Char.Lexer (indentGuard)
 import Data.Maybe (maybeToList, isJust, mapMaybe)
 import Data.Bifunctor (Bifunctor(second))
-import Data.Char (isLetter, isSpace)
+import Data.Char (isLetter, isSpace, isAlphaNum)
 import Data.List (intersperse)
 
 type Parser = Parsec Void Text
@@ -36,10 +36,6 @@ indentLevel = sc *> L.indentLevel
 lexeme :: Parser a -> Parser a
 lexeme = L.lexeme sc
 
-identifier :: Parser Text
-identifier = lexeme (takeWhileP Nothing (\ch -> isLetter ch || ch == '-'))
-    <?> "Identifier"
-
 strLexeme :: Text -> Parser Text
 strLexeme = lexeme . string
 
@@ -50,107 +46,159 @@ pStringBetween :: Char -> Parser Text
 pStringBetween ch = chP *> takeWhileP Nothing (/= ch) <* chP
     where chP = string $ T.singleton ch
 
-pVerbString :: Parser Text
-pVerbString = lexeme (choice (pStringBetween <$> ['`', '"', '\''])) <?> "Verb string"
+pStringLiteralL :: Parser Text
+pStringLiteralL = lexeme (choice (pStringBetween <$> ['"', '\'']))
+    <?> "String literal"
+
+pIdentifierL :: Parser Text
+pIdentifierL = lexeme (takeWhile1P Nothing (\ch -> isLetter ch || ch == '-'))
+    <?> "Identifier"
+
+pOperator :: Parser Text
+pOperator = T.cons <$> satisfy (`elem` fstSmbls) <*> takeWhileP Nothing (not . isSpace)
+    <?> "Operator"
+    where
+        fstSmbls :: [Char]
+        fstSmbls = "!@#$%^&*-+,./|\\><{}[]~"
+
+pOperatorL :: Parser Text
+pOperatorL = lexeme pOperator
+
+pCommandL :: Parser Text
+pCommandL = pOperatorL <|> pIdentifierL
+    <?> "Command"
+
+tabWidth :: Int
+tabWidth = 2
+
+incIndent :: Pos -> Pos
+incIndent = mkPos . (+ tabWidth) . unPos
+
+inEnvironment :: Text -> (Pos -> Parser a) -> Pos -> Parser a
+inEnvironment name pa ind
+    = label ("Environment '" ++ unpack name ++ "'") $ do
+        try $ indentGuard sc EQ ind
+        try $ atLexeme name
+        sc <* newline
+        pa (incIndent ind)
+
+inPref :: Text -> (Pos -> Parser a) -> Pos -> Parser a
+inPref name pa ind
+    = label ("Pref '" ++ unpack name ++ "'") $ do
+        try $ indentGuard sc GT ind
+        try $ string $ name <> " "
+        ind' <- indentLevel
+        pa ind'
+
+indentMany :: Maybe a -> (Pos -> Parser a) -> Pos -> Parser [a]
+indentMany emptyL pa ind = pa ind `sepBy_` try sep
+    where
+        sep = checkIndent *> pEmptyL <* checkIndent <* notFollowedBy eof
+        checkIndent = do
+            ind' <- indentLevel
+            unless (ind' >= ind)
+                $ fail $ "Incorrect indentation (got "
+                    <> show (unPos ind')
+                    <> " should be greater or equal "
+                    <> show (unPos ind)
+        pEmptyL     = (emptyL <*) <$> (optional . try $ sc <* newline <* scn)
+
+concatIndentMany :: [a] -> (Pos -> Parser [a]) -> Pos -> Parser [a]
+concatIndentMany emptyL pa ind = concat <$> indentMany (Just emptyL) pa ind
+
+noIndent :: Parser a -> Pos -> Parser a
+noIndent a ind = indentGuard sc EQ ind >> a
 
 data Environment = Environment {
-                name, begin, end    :: Text,
-                innerMath           :: Bool,
-                pref                :: Maybe Text,
-                group               :: Maybe Text,
-                sep                 :: Maybe Text
-            }
+        name, begin, end    :: Text,
+        innerMath           :: Bool
+    }
+    deriving Show
+data Pref = Pref {
+        name        :: Text,
+        env         :: Text,
+        group       :: Maybe Text,
+        sep         :: Maybe Text
+    }
     deriving Show
 data Command  = Command {
-                name, val           :: Text
-            }
+        name, val   :: Text
+    }
     deriving Show
-
--- instance Show Environment where
---     show Environment{name} = unpack name
 
 data Definition
     = DefE  Environment
     | DefMC Command
     | DefC  Command
+    | DefP  Pref
     deriving Show
 
 pDefinitionBlock :: Parser [Definition]
-pDefinitionBlock = L.nonIndented scn . L.indentBlock scn $ do
-    atLexeme "Define"
-    return $ L.IndentMany Nothing (return . concat)
-         $  map DefE  <$> pEnvsDef
-        <|> map DefC  <$> pCmdsDef
-        <|> map DefMC <$> pMathCmdsDef
+pDefinitionBlock = flip (inEnvironment "Define") (mkPos 1)
+    $ concatIndentMany [] $ \ind ->
+                map DefE  <$> pEnvsDef     ind
+            <|> map DefC  <$> pCmdsDef     ind
+            <|> map DefMC <$> pMathCmdsDef ind
+            <|> map DefP  <$> pPrefDef     ind
 
-data Option
-    = OptInnerMath
-    | OptPref  Text
-    | OptGroup Text
-    | OptSep   Text
+pMathCmdsDef :: Pos -> Parser [Command]
+pMathCmdsDef = inEnvironment "MathCommands"
+    $ indentMany Nothing pCmdDef
 
-pMathCmdsDef :: Parser [Command]
-pMathCmdsDef = L.indentBlock scn $ do
-    atLexeme "MathCommands"
-    return $ L.IndentSome Nothing return pCmdDef
+pCmdsDef :: Pos -> Parser [Command]
+pCmdsDef = inEnvironment "Commands"
+    $ indentMany Nothing pCmdDef
 
-pCmdsDef :: Parser [Command]
-pCmdsDef = L.indentBlock scn $ do
-    atLexeme "Commands"
-    return $ L.IndentSome Nothing return pCmdDef
-
-
-pCmdDef :: Parser Command
-pCmdDef = do
-    name      <- pVerbString
+pCmdDef :: Pos -> Parser Command
+pCmdDef = noIndent $ do
+    name      <- pCommandL
     strLexeme "="
-    val       <- pVerbString
+    val       <- pStringLiteralL
     math      <- isJust <$> optional (atLexeme "Math")
+    newline
     return Command{ name, val }
 
-pEnvsDef :: Parser [Environment]
-pEnvsDef = L.indentBlock scn $ do
-    atLexeme "Environments"
-    return $ L.IndentSome Nothing return $ do
-        name      <- identifier
-        strLexeme "="
+permute2 :: Alternative m => m a -> m b -> m (a, b)
+permute2 a b = choice [
+        (,) <$> a <*> b,
+        (\b a -> (a, b)) <$> b <*> a
+    ]
+
+pEnvsDef :: Pos -> Parser [Environment]
+pEnvsDef = inEnvironment "Environments"
+    $ indentMany Nothing $ noIndent $ do
+        name         <- pIdentifierL
+        strLexeme    "="
         (begin, end) <- pTeX <|> pBeginEnd
-        options <- many pOption
-        let h f = case mapMaybe f options of
-                        []  -> return Nothing
-                        [a] -> return $ Just a
-                        _   -> fail "Option occures twice"
-        innerMath <- isJust <$> h optInnerMath
-        pref      <- h optPref
-        group     <- h optGroup
-        sep       <- h optSep
-        return Environment{ name, begin, end, innerMath, pref, group, sep }
+        innerMath <- isJust <$> optional (atLexeme "Math")
+        newline
+        return Environment{ name, begin, end, innerMath }
     where
         pTeX = do
             atLexeme "TeX"
-            texI <- pVerbString
+            texI <- pStringLiteralL
             return ("\\begin{" <> texI <> "}\n", "\\end{"   <> texI <> "}\n")
-        pBeginEnd = (,) <$> pVerbString <*> pVerbString
-        pOption = choice [
-                OptInnerMath <$   atLexeme "Math",
-                OptPref      <$> (atLexeme "Pref"  *> pVerbString),
-                OptGroup     <$> (atLexeme "Group" *> identifier),
-                OptSep       <$> (atLexeme "Sep"   *> pVerbString)
-            ]
-        optInnerMath OptInnerMath = Just ()
-        optInnerMath _            = Nothing
-        optPref (OptPref t) = Just t
-        optPref _           = Nothing
-        optGroup (OptGroup t) = Just t
-        optGroup _            = Nothing
-        optSep   (OptSep   t) = Just t
-        optSep   _            = Nothing
+        pBeginEnd = (,) <$> pStringLiteralL <*> pStringLiteralL
+
+pPrefDef :: Pos -> Parser [Pref]
+pPrefDef = inEnvironment "Prefs"
+    $ indentMany Nothing $ noIndent $ do
+        name      <- pOperatorL
+        strLexeme "="
+        env       <- pIdentifierL
+        (group, sep) <- permute2
+                (optional $ atLexeme "Group" *> pIdentifierL   )
+                (optional $ atLexeme "Sep"   *> pStringLiteralL)
+        newline
+        return Pref{name, env, group, sep}
+
 data Definitions = Definitions {
         envs         :: [(Text, Environment)],
         cmds         :: [(Text, Command)],
         mathCmds     :: [(Text, Command)],
-        prefLineEnvs :: [(Text, Environment)]
+        prefs        :: [(Text, Pref)]
     }
+    deriving Show
 
 instance Semigroup Definitions where
     (Definitions a b c d) <> (Definitions a' b' c' d')
@@ -162,38 +210,25 @@ processDefs :: [Definition] -> Definitions
 processDefs = mconcat . map processDef
 
 processDef :: Definition -> Definitions
-processDef (DefE env@Environment{name, begin, end, innerMath, pref, group})
-    = Definitions {
-            envs = [(name, env)], cmds = [], mathCmds = [],
-            prefLineEnvs = (, env) <$> maybeToList pref
-        }
+processDef (DefE env@Environment{name, begin, end, innerMath})
+    = mempty { envs     = [(name, env)] }
 processDef (DefC cmd@Command{name})
-    = Definitions {
-            envs = [], cmds = [(name, cmd)], mathCmds = [],
-            prefLineEnvs = []
-        }
+    = mempty { cmds     = [(name, cmd)] }
 processDef (DefMC cmd@Command{name})
-    = Definitions {
-            envs = [], cmds = [], mathCmds = [(name, cmd)],
-            prefLineEnvs = []
-        }
+    = mempty { mathCmds = [(name, cmd)] }
+processDef (DefP pr@Pref{name})
+    = mempty {prefs     = [(name, pr)]}
 
 data DocElement
     = DocParagraph     [[ParEl]]
     | DocEnvironment   Environment [DocElement]
     | DocString        Text
     deriving Show
--- instance Show DocElement where
---     show (DocParagraph els _) = unlines . map (unwords . map show) $ els
---     show (DocEnvironment env els _) = unlines (show env : (show <$> els))
 
 data ParEl
     = ParText Text
     | ParFormula Text
     deriving Show
--- instance Show ParEl where
---     show (ParText    t) = unpack t
---     show (ParFormula t) = "`" ++ unpack t ++ "`"
 
 texDoc :: Definitions -> [DocElement] -> Text
 texDoc = flip texDocImpl False
@@ -208,10 +243,6 @@ texDocElement defs math (DocEnvironment Environment{begin, end, innerMath} els)
         = begin <> texDocImpl defs (math || innerMath) els <> end
 texDocElement _ _ (DocString s) = s
 
-texNewL :: Bool -> Text
-texNewL True  = "\n"
-texNewL False = mempty
-
 texParEl :: Definitions -> Bool -> ParEl -> Text
 texParEl _    False (ParText    t) = t
 texParEl defs False (ParFormula t) = "$" <> texMath defs t <> "$"
@@ -220,58 +251,42 @@ texParEl defs True  (ParFormula t) = texMath defs t
 
 texMath :: Definitions -> Text -> Text
 texMath Definitions{mathCmds} = foldr (.) id fs
-    where fs = map (uncurry replace . second ((<>" ") . val)) mathCmds
+    where fs = map (uncurry T.replace . second ((<>" ") . val)) mathCmds
 
-tabWidth :: Int
-tabWidth = 2
-
-incIndent :: Pos -> Pos
-incIndent = mkPos . (+ tabWidth) . unPos
 
 pDocument :: Definitions -> Parser [DocElement]
 pDocument defs = L.nonIndented scn (pElements defs $ mkPos 1) <* scn
 
 pElements :: Definitions -> Pos -> Parser [DocElement]
-pElements defs ind = pElement defs ind `listSepBy_` try (notFollowedBy eof >> checkIndent >> pEmptyLine)
-    where
-        checkIndent = do
-            ind' <- indentLevel
-            unless (ind' >= ind)
-                $ fail $ "Incorrect indentation (got "
-                    <> show (unPos ind')
-                    <> " should be greater or equal "
-                    <> show (unPos ind)
+pElements defs = indentMany (Just $ DocString "\n") (pElement defs)
 
-pElement :: Definitions -> Pos -> Parser [DocElement]
+pElement :: Definitions -> Pos -> Parser DocElement
 pElement defs ind
-     =  pPrefLineEnvironment    defs ind
-    <|> (:[]) <$> pEnvironment  defs ind
-    <|> (:[]) <$> pParagraph    defs ind
+     =  pPrefLineEnvironment defs ind
+    <|> pEnvironment         defs ind
+    <|> pParagraph           defs ind
 
-pPrefLineEnvironment :: Definitions -> Pos -> Parser [DocElement]
-pPrefLineEnvironment defs@Definitions{prefLineEnvs, envs} ind = do
-    try $ indentGuard sc EQ (incIndent ind)
-    choice (try . uncurry mkP <$> prefLineEnvs)
-    where
-        mkP' :: Text -> Environment -> Parser [DocElement]
-        mkP' pref env@Environment{sep} = do
-            let pPref = indentGuard sc EQ (incIndent ind) *> string (pref <> " ")
-            pPref
-            let pEl = do
-                    pos'' <- indentLevel
-                    DocEnvironment env <$> pElements defs  pos''
-            els <- pEl `sepBy` try pPref
-            case sep of
-                Nothing -> return els
-                Just s  -> return $ intersperse (DocString s) els
-
-        mkP :: Text -> Environment -> Parser [DocElement]
-        mkP pref env@Environment{group} = do
-            els <- mkP' pref env
-            case group >>= flip lookup envs of
-                Nothing     -> return $ els
-                Just grEnv  -> return [DocEnvironment grEnv els]
-
+pPrefLineEnvironment :: Definitions -> Pos -> Parser DocElement
+pPrefLineEnvironment defs@Definitions{prefs, envs} ind = do
+    try $ indentGuard sc GT ind
+    ind'     <- indentLevel
+    name     <- pOperator <* string " "
+    Pref{env = envName, group, sep} <-
+        lookup name prefs `failMsg` "Unexpected prefix: " ++ unpack name
+    env      <- lookup envName envs `failMsg` "Unrecognized environment " ++ unpack envName
+    let pPref = indentGuard sc EQ ind' *> string (name <> " ")
+        pEl = do
+            ind'' <- indentLevel
+            DocEnvironment env <$> pElements defs ind''
+    case group of
+        Nothing         -> pEl
+        Just groupName  -> do
+            group <- lookup groupName envs `failMsg` "Unrecognized group environment " ++ unpack groupName
+            els   <- pEl `sepBy` try pPref
+            let els' = case sep of
+                        Nothing -> els
+                        Just s  -> intersperse (DocString s) els
+            return $ DocEnvironment group els'
 
 pParagraph :: Definitions -> Pos -> Parser DocElement
 pParagraph defs ind = do
@@ -294,16 +309,11 @@ pEnvironment :: Definitions -> Pos -> Parser DocElement
 pEnvironment defs@Definitions{envs} ind = do
     name <- try $ do
         indentGuard sc EQ ind
-        string "@" *> identifier <* sc <* newline
+        string "@" *> pIdentifierL <* sc <* newline
     case lookup name envs of
         Nothing  -> fail $ "Undefined environment " ++ show name
         Just env -> DocEnvironment env <$> pElements defs (incIndent ind)
 
-pEmptyLine :: Parser [DocElement]
-pEmptyLine = h <$> (optional . try $ sc <* newline <* scn)
-    where
-        h Nothing  = []
-        h (Just _) = [DocString "\n"]
 pFile :: Parser (Definitions, [DocElement])
 pFile = do
     defs <- processDefs <$> pDefinitionBlock
