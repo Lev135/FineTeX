@@ -50,7 +50,7 @@ category:            Math
 extra-source-files:  README.md
 
 
-executable LaTeX-generator
+executable texgen
   -- .hs or .lhs file containing the Main module.
   main-is:             Main.hs
 

@@ -3,6 +3,7 @@ module Main where
 import Generator
 import Data.Text(Text, pack, unpack)
 import Text.Megaparsec (parse, errorBundlePretty, MonadParsec (eof), mkPos, Pos)
+import System.Environment (getArgs)
 
 parsePart :: Parser a -> Text -> Either String a
 parsePart p s = case parse p "" s of
@@ -26,16 +27,9 @@ processFile inpFile outpFile = do
       Left  e -> putStrLn e
       Right (defs, r) -> writeFile outpFile (unpack $ texDoc defs r)
 
-
-printErr :: Show a => Either String a -> IO ()
-printErr (Left  e) = putStrLn e
-printErr (Right v) = print v
-
-test :: Show a => (Definitions -> Pos -> Parser a) -> Int -> Text -> IO ()
-test p n str= do
-    inp <- pack <$> readFile "tests/defs2.ttex"
-    case parseAll pDefinitionBlock inp of
-        Left  e   -> putStrLn e
-        Right des -> printErr $ parseAll (p (processDefs des) (mkPos n)) str
-
-main = putStrLn "Hello, world!"
+main :: IO ()
+main = do
+    args <- getArgs
+    case args of
+        [inpF, outpF] -> processFile inpF outpF
+        _             -> putStrLn "Incorrect number of arguments. Usage: texgen <inpFile> <outpFile>"
