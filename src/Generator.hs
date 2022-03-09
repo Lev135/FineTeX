@@ -5,24 +5,22 @@
 
 module Generator where
 
-import Utils
+import Utils ( sepBy_, failMsg )
 
 import Text.Megaparsec(Parsec, MonadParsec (takeWhileP, label, takeWhile1P, try, notFollowedBy, lookAhead, eof), Pos, sepBy1, sepBy, unPos, (<?>), choice, optional, parse, errorBundlePretty, mkPos, satisfy)
 import Text.Megaparsec.Char ( char, space1, newline, letterChar, string )
-import Text.Megaparsec.Debug ()
 import qualified Text.Megaparsec.Char.Lexer as L
+import Text.Megaparsec.Char.Lexer (indentGuard)
+
 import Data.Void(Void)
-import Data.Text (Text, intercalate, replace, pack, unpack)
+import Data.Text (Text, pack, unpack)
 import qualified Data.Text as T
 import Control.Monad (void, when, unless)
 import Control.Applicative ( Alternative(empty, (<|>), some, many) )
-import Text.Megaparsec.Char.Lexer (indentGuard)
 import Data.Maybe (maybeToList, isJust, mapMaybe)
 import Data.Bifunctor (Bifunctor(second))
 import Data.Char (isLetter, isSpace, isAlphaNum)
 import Data.List (intersperse)
-
-dbg = flip const
 
 type Parser = Parsec Void Text
 
@@ -127,9 +125,6 @@ data Command  = Command {
         name, val   :: Text
     }
     deriving Show
-
--- instance Show Environment where
---     show Environment{name} = unpack name
 
 data Definition
     = DefE  Environment
@@ -256,7 +251,7 @@ texParEl defs True  (ParFormula t) = texMath defs t
 
 texMath :: Definitions -> Text -> Text
 texMath Definitions{mathCmds} = foldr (.) id fs
-    where fs = map (uncurry replace . second ((<>" ") . val)) mathCmds
+    where fs = map (uncurry T.replace . second ((<>" ") . val)) mathCmds
 
 
 pDocument :: Definitions -> Parser [DocElement]
@@ -267,9 +262,9 @@ pElements defs = indentMany (Just $ DocString "\n") (pElement defs)
 
 pElement :: Definitions -> Pos -> Parser DocElement
 pElement defs ind
-     =  dbg "pref" (pPrefLineEnvironment defs ind)
-    <|> dbg "env"  (pEnvironment         defs ind)
-    <|> dbg "par"  (pParagraph           defs ind)
+     =  pPrefLineEnvironment defs ind
+    <|> pEnvironment         defs ind
+    <|> pParagraph           defs ind
 
 pPrefLineEnvironment :: Definitions -> Pos -> Parser DocElement
 pPrefLineEnvironment defs@Definitions{prefs, envs} ind = do
@@ -282,7 +277,7 @@ pPrefLineEnvironment defs@Definitions{prefs, envs} ind = do
     let pPref = indentGuard sc EQ ind' *> string (name <> " ")
         pEl = do
             ind'' <- indentLevel
-            DocEnvironment env <$> dbg "prefEnv inner els" (pElements defs ind'')
+            DocEnvironment env <$> pElements defs ind''
     case group of
         Nothing         -> pEl
         Just groupName  -> do
