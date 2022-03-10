@@ -16,17 +16,14 @@ parseAll p = parsePart (p <* eof)
 parseFile :: FilePath -> IO ()
 parseFile filePath = do
     inp <- pack <$> readFile filePath
-    case parseAll pFile inp of
+    case parseAll (pFile mempty) inp of
       Left  e         -> putStrLn e
       Right (defs, r) -> putStrLn (unpack $ texDoc defs r)
 
 processFile :: FilePath -> FilePath -> IO ()
 processFile inpFile outpFile = do
-    inp <- pack <$> readFile inpFile
-    let pRes = parse pFile inpFile inp
-    case pRes of
-      Left  e         -> putStrLn $ errorBundlePretty e
-      Right (defs, r) -> writeFile outpFile (unpack $ texDoc defs r)
+    (defs, docEls) <- readDoc inpFile
+    writeFile outpFile (unpack $ texDoc defs docEls)
 
 main :: IO ()
 main = do

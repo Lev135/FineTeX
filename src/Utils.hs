@@ -4,6 +4,8 @@ import Data.Maybe (mapMaybe, maybeToList)
 import Control.Applicative (Alternative ((<|>), many))
 import Control.Monad.Fail (MonadFail)
 
+(.:) :: Functor f => (b -> c) -> (a -> f b) -> a -> f c
+f .: g = fmap f . g
 
 -- | Convert a 'Maybe' value to a value in any monad
 failMsg :: MonadFail m => Maybe a -> String -> m a 
