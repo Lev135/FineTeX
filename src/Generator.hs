@@ -147,7 +147,7 @@ pMathCmdsDef = inEnvironment "MathCommands"
 
 pCmdsDef :: Pos -> Parser [Command]
 pCmdsDef = inEnvironment "Commands"
-    $ indentMany Nothing pCmdDef
+    $ fail "Non-math commands are not realized yet. Use @MathCmds for commands in Math mode"
 
 pCmdDef :: Pos -> Parser Command
 pCmdDef = noIndent $ do
