@@ -93,7 +93,7 @@ inPref name pa ind
 indentMany :: Maybe a -> (Pos -> Parser a) -> Pos -> Parser [a]
 indentMany emptyL pa ind = pa ind `sepBy_` try sep
     where
-        sep = checkIndent *> pEmptyL <* checkIndent <* notFollowedBy eof
+        sep = lookAhead (scn *> checkIndent) *> pEmptyL <* checkIndent <* notFollowedBy eof
         checkIndent = do
             ind' <- indentLevel
             unless (ind' >= ind)

@@ -1,13 +1,9 @@
-Для запуска скомпилированного файла выполните:
+For running translation execute:
 ```
     cabal new-update
-    cabal new-run texgen -- examples/nibergall.ttex examples/nibergall.tex
+    cabal new-run texgen -- examples/example.ttex examples/example.tex
 ```
 
-Для запуска трансляции из интерпретатора выполните:
-```
-    cabal new-update
-    cabal new-repl
-    :l Main
-    processFile "examples/nibergall.ttex" "examples/nibergall.tex"
-```
+There is no getting started guide or language documentation yet. 
+It's recommended to read `examples/example.ttex` file.  
+For more complex example see `examples/nibergall.ttex`.

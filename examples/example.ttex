@@ -1,0 +1,86 @@
+@Define
+  @Environments
+    Document       = @TeX "document"
+    Equation       = @TeX "equation" @Math
+    AlignS         = @TeX "align*"   @Math 
+    Itemize        = @TeX "itemize"
+    Enumerate      = @TeX "enumerate"
+    AlignS-item    = ""       ""  
+    Itemize-item   = "\item " ""  
+    Enumerate-item = "\item " ""
+  @Prefs
+    >              = AlignS-item    @Group AlignS     @Sep "\\"
+    -              = Itemize-item   @Group Itemize
+    #              = Enumerate-item @Group Enumerate
+  @MathCommands
+    <=           = "\leq"
+    >=           = "\geq"
+    !=           = "\neq"
+% That was a block of definitions. It should be the first environment in file
+% By this moment there is no way to import definitions from other file
+% so we have to declare all base environments and commands in every file separately
+
+% Note, that there are no comments in .ttex format by this moment. 
+% These comments are just a paragraph, that will be translated in .tex file 
+% (and then removed during the compilation of .pdf file)
+% As a consequence we can't use comments in @Define environment and 
+% in other places, except those in which paragraphs are allowed.
+% In addition, you cannot use back quotes in them, since they will be parsed
+% as an inline math expression.
+
+% By now we should add \documentclass and \usepackage commands
+% also as a plain text
+\documentclass[12pt,a4paper,oneside]{article}
+\usepackage[utf8]{inputenc}
+\usepackage{amsmath}
+\usepackage{amssymb}
+
+
+@Document
+  % Everything here (2 spaces-indented) will be in \begin{document} .. \end{document}
+  % Indentation must be exactly 2 spaces
+
+  This is a simple paragraph
+  Which continues at the next line
+
+  And this is the next paragraph
+  
+  \section{lists} 
+  % By this moment there is no way to take arguments in environment,
+  % so we use a paragraph with TeX command here to start a section
+  @Prefs style is very useful for items. 
+  Note that prefs should be indented more then surrounding paragraphs
+    - enumerate (this text is in paragraph inside an item):
+        # one (it should be more indented then paragraph)
+        # two
+        # three
+    - itemize:
+        - one
+        - two
+        - three
+
+  Consecutive elements of the list are framed by the itemize/enumerate environment,
+  if there is no empty lines between them. So:
+    # one
+    # two
+    # three
+
+    # one again
+    # two
+  
+  \section{Math}
+  Inline math can be inserted in paragraph in back quotes: `a + b = c` 
+  --- this is inline math
+
+  Fore block math @Prefs syntax is used: 
+    > a + b = c 
+  Next lines will be framed by align* environment and \verb.\\. 
+  will be added between them automatically
+    > a + b     &= c
+    > (a + b)^2 &= d
+
+    > a + b + c &= 0
+  Note that the last equation will framed by separate align*, because
+  there is an empty line before it. 
+
+  To be continued... 
