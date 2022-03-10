@@ -4,6 +4,7 @@ import Generator
 import Data.Text(Text, pack, unpack)
 import Text.Megaparsec (parse, errorBundlePretty, MonadParsec (eof), mkPos, Pos)
 import System.Environment (getArgs)
+import Control.Monad.Except (ExceptT(ExceptT), runExceptT)
 
 parsePart :: Parser a -> Text -> Either String a
 parsePart p s = case parse p "" s of
@@ -22,8 +23,10 @@ parseFile filePath = do
 
 processFile :: FilePath -> FilePath -> IO ()
 processFile inpFile outpFile = do
-    (defs, docEls) <- readDoc inpFile
-    writeFile outpFile (unpack $ texDoc defs docEls)
+    res <- runExceptT (readDoc inpFile :: ExceptT String IO (Definitions, [DocElement]))
+    case res of
+      Left   e             -> putStrLn e
+      Right (defs, docEls) -> writeFile outpFile (unpack $ texDoc defs docEls)
 
 main :: IO ()
 main = do

@@ -2,9 +2,11 @@
 {-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE TupleSections #-}
+{-# LANGUAGE FlexibleContexts #-}
 
 module Generator where
 
+import Prelude hiding (readFile)
 import Utils ( sepBy_, failMsg, (.:) )
 
 import Text.Megaparsec(Parsec, MonadParsec (takeWhileP, label, takeWhile1P, try, notFollowedBy, lookAhead, eof), Pos, sepBy1, sepBy, unPos, (<?>), choice, optional, parse, errorBundlePretty, mkPos, satisfy)
@@ -21,6 +23,11 @@ import Data.Maybe (maybeToList, isJust, mapMaybe, fromMaybe)
 import Data.Bifunctor (Bifunctor(second, first))
 import Data.Char (isLetter, isSpace, isAlphaNum)
 import Data.List (intersperse)
+import Data.Text.IO
+import Control.Monad.IO.Class (MonadIO)
+import Control.Monad.Except
+import System.IO.Error (catchIOError)
+
 
 type Parser = Parsec Void Text
 
@@ -330,8 +337,9 @@ pEnvironment defs@Definitions{envs} ind = do
 pFile :: Definitions -> Parser (Definitions, [DocElement])
 pFile impDefs = do
     defs <- processDefs <$> pDefinitionBlock
-    doc  <- pDocument (impDefs <> defs)
-    return (defs, doc)
+    let defs' = impDefs <> defs
+    doc  <- pDocument defs'
+    return (defs', doc)
 
 pImportFiles :: Parser [FilePath]
 pImportFiles = L.nonIndented scn $
@@ -342,13 +350,14 @@ pImportFiles = L.nonIndented scn $
 getImports :: FilePath -> Text -> Either String [FilePath]
 getImports = first (("get imports error: " <>) . errorBundlePretty) .: parse pImportFiles
 
-readDoc :: FilePath -> IO (Definitions, [DocElement])
+readDoc :: (MonadError String m, MonadIO m) => FilePath -> m (Definitions, [DocElement])
 readDoc fileName = do
-    file      <- pack <$> readFile fileName
-    impFNames <- case getImports fileName file of
-                    Left  e -> fail e
-                    Right s -> return s
-    defs <- mconcat <$> mapM ((fst <$>) . readDoc) impFNames
+    mfile     <- liftIO $ (Just <$> readFile fileName) `catchIOError` const (return Nothing)
+    file      <- case mfile of
+        Nothing   -> throwError $ "Unable to open file '" <> fileName <> "'" 
+        Just file -> return file
+    impFNames <- liftEither $ getImports fileName file
+    defs      <- mconcat <$> mapM ((fst <$>) . readDoc) impFNames
     case parse (pFile defs) fileName file of
-        Left   e   -> fail $ errorBundlePretty e
+        Left   e   -> throwError $ errorBundlePretty e
         Right  res -> return res
