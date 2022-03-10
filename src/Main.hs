@@ -23,8 +23,9 @@ parseFile filePath = do
 processFile :: FilePath -> FilePath -> IO ()
 processFile inpFile outpFile = do
     inp <- pack <$> readFile inpFile
-    case parseAll pFile inp of
-      Left  e -> putStrLn e
+    let pRes = parse pFile inpFile inp
+    case pRes of
+      Left  e         -> putStrLn $ errorBundlePretty e
       Right (defs, r) -> writeFile outpFile (unpack $ texDoc defs r)
 
 main :: IO ()
