@@ -7,7 +7,7 @@
 module Generator where
 
 import Prelude hiding (readFile)
-import Utils ( sepBy_, failMsg, (.:) )
+import Utils ( sepBy_, failMsg, (.:), withError )
 
 import Text.Megaparsec(Parsec, MonadParsec (takeWhileP, label, takeWhile1P, try, notFollowedBy, lookAhead, eof), Pos, sepBy1, sepBy, unPos, (<?>), choice, optional, parse, errorBundlePretty, mkPos, satisfy)
 import Text.Megaparsec.Char ( char, space1, newline, letterChar, string )
@@ -23,11 +23,9 @@ import Data.Maybe (maybeToList, isJust, mapMaybe, fromMaybe)
 import Data.Bifunctor (Bifunctor(second, first))
 import Data.Char (isLetter, isSpace, isAlphaNum)
 import Data.List (intersperse)
-import Data.Text.IO
-import Control.Monad.IO.Class (MonadIO)
-import Control.Monad.Except
-import System.IO.Error (catchIOError)
-
+import Control.Monad.Except (MonadError (throwError), MonadIO (liftIO), liftEither)
+import Control.Monad.Catch (MonadCatch, catchIOError)
+import Data.Text.IO (readFile)
 
 type Parser = Parsec Void Text
 
@@ -344,20 +342,19 @@ pFile impDefs = do
 pImportFiles :: Parser [FilePath]
 pImportFiles = L.nonIndented scn $
     try (atLexeme "Import" *> fmap unpack pStringLiteralL `sepBy` try (newline *> scn *> atLexeme "Import"))
-        <|>
-         return []
+        <|> return []
 
 getImports :: FilePath -> Text -> Either String [FilePath]
 getImports = first (("get imports error: " <>) . errorBundlePretty) .: parse pImportFiles
 
-readDoc :: (MonadError String m, MonadIO m) => FilePath -> m (Definitions, [DocElement])
+readDoc :: (MonadError String m, MonadIO m, MonadCatch m) => FilePath -> m (Definitions, [DocElement])
 readDoc fileName = do
-    mfile     <- liftIO $ (Just <$> readFile fileName) `catchIOError` const (return Nothing)
-    file      <- case mfile of
-        Nothing   -> throwError $ "Unable to open file '" <> fileName <> "'" 
-        Just file -> return file
+    file      <- liftIO (readFile fileName)
+        `catchIOError` \e -> throwError ("Unable to open file '" <> fileName <> "': " <> show e)
     impFNames <- liftEither $ getImports fileName file
-    defs      <- mconcat <$> mapM ((fst <$>) . readDoc) impFNames
+    defs      <- mconcat <$> mapM ((fst <$>) . withError addPrefix . readDoc) impFNames
     case parse (pFile defs) fileName file of
         Left   e   -> throwError $ errorBundlePretty e
         Right  res -> return res
+    where
+        addPrefix eStr = "While processing imports from " <> fileName <> ":\n" <> eStr
