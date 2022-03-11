@@ -64,7 +64,9 @@ executable texgen
   -- Other library packages from which modules are imported.
   build-depends:       base >=4.12.0.0,
                        text >=1.2.3.1,
-                       megaparsec >= 9.0.1
+                       megaparsec >= 9.0.1,
+                       mtl        >= 2.2.2,
+                       exceptions >= 0.10.4
                        
 
   -- Directories containing source files.

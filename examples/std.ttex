@@ -1,0 +1,18 @@
+@Define
+  @Environments
+    Document       = @TeX "document"
+    Equation       = @TeX "equation" @Math
+    AlignS         = @TeX "align*"   @Math 
+    Itemize        = @TeX "itemize"
+    Enumerate      = @TeX "enumerate"
+    AlignS-item    = ""       ""  
+    Itemize-item   = "\item " ""  
+    Enumerate-item = "\item " ""
+  @Prefs
+    >              = AlignS-item    @Group AlignS     @Sep "\\"
+    -              = Itemize-item   @Group Itemize
+    #              = Enumerate-item @Group Enumerate
+  @MathCommands
+    <=           = "\leq"
+    >=           = "\geq"
+    !=           = "\neq"

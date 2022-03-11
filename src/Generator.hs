@@ -2,11 +2,13 @@
 {-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE TupleSections #-}
+{-# LANGUAGE FlexibleContexts #-}
 
 module Generator where
 
-import Utils ( sepBy_, failMsg )
-
+import Prelude hiding (readFile)
+import Utils ( sepBy_, failMsg, (.:), withError )
+import Text.Megaparsec.Debug
 import Text.Megaparsec(Parsec, MonadParsec (takeWhileP, label, takeWhile1P, try, notFollowedBy, lookAhead, eof), Pos, sepBy1, sepBy, unPos, (<?>), choice, optional, parse, errorBundlePretty, mkPos, satisfy)
 import Text.Megaparsec.Char ( char, space1, newline, letterChar, string )
 import qualified Text.Megaparsec.Char.Lexer as L
@@ -17,10 +19,13 @@ import Data.Text (Text, pack, unpack)
 import qualified Data.Text as T
 import Control.Monad (void, when, unless)
 import Control.Applicative ( Alternative(empty, (<|>), some, many) )
-import Data.Maybe (maybeToList, isJust, mapMaybe)
-import Data.Bifunctor (Bifunctor(second))
+import Data.Maybe (maybeToList, isJust, mapMaybe, fromMaybe)
+import Data.Bifunctor (Bifunctor(second, first))
 import Data.Char (isLetter, isSpace, isAlphaNum)
 import Data.List (intersperse)
+import Control.Monad.Except (MonadError (throwError), MonadIO (liftIO), liftEither)
+import Control.Monad.Catch (MonadCatch, catchIOError)
+import Data.Text.IO (readFile)
 
 type Parser = Parsec Void Text
 
@@ -77,10 +82,20 @@ incIndent = mkPos . (+ tabWidth) . unPos
 inEnvironment :: Text -> (Pos -> Parser a) -> Pos -> Parser a
 inEnvironment name pa ind
     = label ("Environment '" ++ unpack name ++ "'") $ do
-        try $ indentGuard sc EQ ind
-        try $ atLexeme name
-        sc <* newline
+        try $ do
+            indentGuard sc EQ ind
+            atLexeme name <* sc <* newline
         pa (incIndent ind)
+
+inArgsEnvironment :: Text -> Parser args -> (args -> Pos -> Parser a) -> Pos -> Parser a
+inArgsEnvironment name pargs pa ind
+    = label ("Environment '" ++ unpack name ++ "'") $ do
+        try $ do
+            indentGuard sc EQ ind
+            atLexeme name
+        args <- pargs
+        sc <* newline
+        pa args (incIndent ind)
 
 inPref :: Text -> (Pos -> Parser a) -> Pos -> Parser a
 inPref name pa ind
@@ -134,12 +149,16 @@ data Definition
     deriving Show
 
 pDefinitionBlock :: Parser [Definition]
-pDefinitionBlock = flip (inEnvironment "Define") (mkPos 1)
-    $ concatIndentMany [] $ \ind ->
+pDefinitionBlock = skipImps zeroInd *> (fromMaybe [] <$> optional (pDefs zeroInd))
+    where
+        zeroInd = mkPos 1
+        pDefs = inEnvironment "Define" $ concatIndentMany [] $ \ind ->
                 map DefE  <$> pEnvsDef     ind
             <|> map DefC  <$> pCmdsDef     ind
             <|> map DefMC <$> pMathCmdsDef ind
             <|> map DefP  <$> pPrefDef     ind
+        skipImps ind = inArgsEnvironment "Import" pStringLiteralL (const return) ind
+             `sepBy` try (lookAhead (scn *> atLexeme "Import"))
 
 pMathCmdsDef :: Pos -> Parser [Command]
 pMathCmdsDef = inEnvironment "MathCommands"
@@ -314,8 +333,29 @@ pEnvironment defs@Definitions{envs} ind = do
         Nothing  -> fail $ "Undefined environment " ++ show name
         Just env -> DocEnvironment env <$> pElements defs (incIndent ind)
 
-pFile :: Parser (Definitions, [DocElement])
-pFile = do
+pFile :: Definitions -> Parser (Definitions, [DocElement])
+pFile impDefs = do
     defs <- processDefs <$> pDefinitionBlock
-    doc  <- pDocument defs
-    return (defs, doc)
+    let defs' = impDefs <> defs
+    doc  <- pDocument defs'
+    return (defs', doc)
+
+pImportFiles :: Parser [FilePath]
+pImportFiles = L.nonIndented scn $
+    try (atLexeme "Import" *> fmap unpack pStringLiteralL `sepBy` try (newline *> scn *> atLexeme "Import"))
+        <|> return []
+
+getImports :: FilePath -> Text -> Either String [FilePath]
+getImports = first (("get imports error: " <>) . errorBundlePretty) .: parse pImportFiles
+
+readDoc :: (MonadError String m, MonadIO m, MonadCatch m) => FilePath -> m (Definitions, [DocElement])
+readDoc fileName = do
+    file      <- liftIO (readFile fileName)
+        `catchIOError` \e -> throwError ("Unable to open file '" <> fileName <> "': " <> show e)
+    impFNames <- liftEither $ getImports fileName file
+    defs      <- mconcat <$> mapM ((fst <$>) . withError addPrefix . readDoc) impFNames
+    case parse (pFile defs) fileName file of
+        Left   e   -> throwError $ errorBundlePretty e
+        Right  res -> return res
+    where
+        addPrefix eStr = "While processing imports from " <> fileName <> ":\n" <> eStr

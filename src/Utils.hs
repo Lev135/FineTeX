@@ -3,7 +3,10 @@ module Utils where
 import Data.Maybe (mapMaybe, maybeToList)
 import Control.Applicative (Alternative ((<|>), many))
 import Control.Monad.Fail (MonadFail)
+import Control.Monad.Except (MonadError (throwError, catchError))
 
+(.:) :: Functor f => (b -> c) -> (a -> f b) -> a -> f c
+f .: g = fmap f . g
 
 -- | Convert a 'Maybe' value to a value in any monad
 failMsg :: MonadFail m => Maybe a -> String -> m a 
@@ -39,3 +42,6 @@ sepBy1_ p sep = (:) <$> p <*> (
         concat <$> many ((\x y -> x <> [y]) <$> (maybeToList <$> sep) <*> p)
     )
 {-# INLINE sepBy1_ #-}
+
+withError :: MonadError e m => (e -> e) -> m a -> m a
+withError f ma = catchError ma (throwError . f)
