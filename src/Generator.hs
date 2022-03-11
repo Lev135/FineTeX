@@ -8,7 +8,7 @@ module Generator where
 
 import Prelude hiding (readFile)
 import Utils ( sepBy_, failMsg, (.:), withError )
-
+import Text.Megaparsec.Debug
 import Text.Megaparsec(Parsec, MonadParsec (takeWhileP, label, takeWhile1P, try, notFollowedBy, lookAhead, eof), Pos, sepBy1, sepBy, unPos, (<?>), choice, optional, parse, errorBundlePretty, mkPos, satisfy)
 import Text.Megaparsec.Char ( char, space1, newline, letterChar, string )
 import qualified Text.Megaparsec.Char.Lexer as L
@@ -82,16 +82,17 @@ incIndent = mkPos . (+ tabWidth) . unPos
 inEnvironment :: Text -> (Pos -> Parser a) -> Pos -> Parser a
 inEnvironment name pa ind
     = label ("Environment '" ++ unpack name ++ "'") $ do
-        try $ indentGuard sc EQ ind
-        try $ atLexeme name
-        sc <* newline
+        try $ do
+            indentGuard sc EQ ind
+            atLexeme name <* sc <* newline
         pa (incIndent ind)
 
 inArgsEnvironment :: Text -> Parser args -> (args -> Pos -> Parser a) -> Pos -> Parser a
 inArgsEnvironment name pargs pa ind
     = label ("Environment '" ++ unpack name ++ "'") $ do
-        try $ indentGuard sc EQ ind
-        try $ atLexeme name
+        try $ do
+            indentGuard sc EQ ind
+            atLexeme name
         args <- pargs
         sc <* newline
         pa args (incIndent ind)
