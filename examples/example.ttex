@@ -1,4 +1,7 @@
 @Import "examples/std.ttex"
+@Define
+  @Environments
+    Section (name : String) = "\\section{@name}\n" ""
 
 % That was a block of definitions. It should be the first environment in file
 % By this moment there is no way to import definitions from other file
@@ -29,42 +32,42 @@
 
   And this is the next paragraph
   
-  \section{lists} 
-  % By this moment there is no way to take arguments in environment,
-  % so we use a paragraph with TeX command here to start a section
-  @Prefs style is very useful for items. 
-  Note that prefs should be indented more then surrounding paragraphs
-    - enumerate (this text is in paragraph inside an item):
-        # one (it should be more indented then paragraph)
-        # two
-        # three
-    - itemize:
-        - one
-        - two
-        - three
+  @Section "Lists" 
+    % By this moment there is no way to take arguments in environment,
+    % so we use a paragraph with TeX command here to start a section
+    @Prefs style is very useful for items. 
+    Note that prefs should be indented more then surrounding paragraphs
+      - enumerate (this text is in paragraph inside an item):
+          # one (it should be more indented then paragraph)
+          # two
+          # three
+      - itemize:
+          - one
+          - two
+          - three
 
-  Consecutive elements of the list are framed by the itemize/enumerate environment,
-  if there is no empty lines between them. So:
-    # one
-    # two
-    # three
+    Consecutive elements of the list are framed by the itemize/enumerate environment,
+    if there is no empty lines between them. So:
+      # one
+      # two
+      # three
 
-    # one again
-    # two
+      # one again
+      # two
   
-  \section{Math}
-  Inline math can be inserted in paragraph in back quotes: `a + b = c` 
-  --- this is inline math
+  @Section "Math"
+    Inline math can be inserted in paragraph in back quotes: `a + b = c` 
+    --- this is inline math
 
-  Fore block math @Prefs syntax is used: 
-    > a + b = c 
-  Next lines will be framed by align* environment and \verb.\\. 
-  will be added between them automatically
-    > a + b     &= c
-    > (a + b)^2 &= d
+    Fore block math @Prefs syntax is used: 
+      > a + b = c 
+    Next lines will be framed by align* environment and \verb.\\. 
+    will be added between them automatically
+      > a + b     &= c
+      > (a + b)^2 &= d
 
-    > a + b + c &= 0
-  Note that the last equation will framed by separate align*, because
-  there is an empty line before it. 
+      > a + b + c &= 0
+    Note that the last equation will framed by separate align*, because
+    there is an empty line before it. 
 
   To be continued... 

@@ -6,13 +6,13 @@
     Itemize        = @TeX "itemize"
     Enumerate      = @TeX "enumerate"
     AlignS-item    = ""       ""  
-    Itemize-item   = "\item " ""  
-    Enumerate-item = "\item " ""
+    Itemize-item   = "\\item " ""  
+    Enumerate-item = "\\item " ""
   @Prefs
-    >              = AlignS-item    @Group AlignS     @Sep "\\"
+    >              = AlignS-item    @Group AlignS     @Sep "\\\\"
     -              = Itemize-item   @Group Itemize
     #              = Enumerate-item @Group Enumerate
   @MathCommands
-    <=           = "\leq"
-    >=           = "\geq"
-    !=           = "\neq"
+    <=           = "\\leq"
+    >=           = "\\geq"
+    !=           = "\\neq"

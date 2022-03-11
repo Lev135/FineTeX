@@ -9,7 +9,7 @@ module Generator where
 import Prelude hiding (readFile)
 import Utils ( sepBy_, failMsg, (.:), withError )
 import Text.Megaparsec.Debug
-import Text.Megaparsec(Parsec, MonadParsec (takeWhileP, label, takeWhile1P, try, notFollowedBy, lookAhead, eof), Pos, sepBy1, sepBy, unPos, (<?>), choice, optional, parse, errorBundlePretty, mkPos, satisfy)
+import Text.Megaparsec(Parsec, MonadParsec (takeWhileP, label, takeWhile1P, try, notFollowedBy, lookAhead, eof), Pos, sepBy1, sepBy, unPos, (<?>), choice, optional, parse, errorBundlePretty, mkPos, satisfy, manyTill)
 import Text.Megaparsec.Char ( char, space1, newline, letterChar, string )
 import qualified Text.Megaparsec.Char.Lexer as L
 import Text.Megaparsec.Char.Lexer (indentGuard)
@@ -48,7 +48,7 @@ atLexeme :: Text -> Parser Text
 atLexeme = strLexeme . ("@" <>)
 
 pStringBetween :: Char -> Parser Text
-pStringBetween ch = chP *> takeWhileP Nothing (/= ch) <* chP
+pStringBetween ch = chP *> (T.pack <$> manyTill L.charLiteral chP)
     where chP = string $ T.singleton ch
 
 pStringLiteralL :: Parser Text
@@ -124,8 +124,22 @@ concatIndentMany emptyL pa ind = concat <$> indentMany (Just emptyL) pa ind
 noIndent :: Parser a -> Pos -> Parser a
 noIndent a ind = indentGuard sc EQ ind >> a
 
+data ArgType = ArgString
+    deriving Show
+type ArgName = Text
+
+data Argument = Argument {
+            atype :: ArgType,
+            name  :: ArgName
+        }
+    deriving Show
+
+newtype ArgV = ArgVString Text
+    deriving Show
+
 data Environment = Environment {
         name, begin, end    :: Text,
+        args                :: [Argument],
         innerMath           :: Bool
     }
     deriving Show
@@ -183,15 +197,28 @@ permute2 a b = choice [
         (\b a -> (a, b)) <$> b <*> a
     ]
 
+pType :: Parser ArgType
+pType = ArgString <$ strLexeme "String"
+
+pDefArgs :: Parser [Argument]
+pDefArgs = many $ do
+    try $ strLexeme "("
+    name  <- pIdentifierL
+    strLexeme ":"
+    atype <- pType
+    strLexeme ")"
+    return Argument{name, atype}
+
 pEnvsDef :: Pos -> Parser [Environment]
 pEnvsDef = inEnvironment "Environments"
     $ indentMany Nothing $ noIndent $ do
         name         <- pIdentifierL
+        args         <- pDefArgs
         strLexeme    "="
         (begin, end) <- pTeX <|> pBeginEnd
         innerMath <- isJust <$> optional (atLexeme "Math")
         newline
-        return Environment{ name, begin, end, innerMath }
+        return Environment{ name, begin, end, args, innerMath }
     where
         pTeX = do
             atLexeme "TeX"
@@ -240,7 +267,7 @@ processDef (DefP pr@Pref{name})
 
 data DocElement
     = DocParagraph     [[ParEl]]
-    | DocEnvironment   Environment [DocElement]
+    | DocEnvironment   Environment [ArgV] [DocElement]
     | DocString        Text
     deriving Show
 
@@ -255,11 +282,18 @@ texDoc = flip texDocImpl False
 texDocImpl :: Definitions -> Bool -> [DocElement] -> Text
 texDocImpl defs math = T.concat . map (texDocElement defs math)
 
+
+replaceArgs :: [Argument] -> [ArgV] -> Text -> Text
+replaceArgs args argvs = foldr (.) id (zipWith h args argvs)
+    where
+        h Argument{name} (ArgVString s) = T.replace ("@" <> name) s
+
 texDocElement :: Definitions -> Bool -> DocElement -> Text
 texDocElement defs math (DocParagraph els)
         = T.unlines $ map (mconcat . map (texParEl defs math)) els
-texDocElement defs math (DocEnvironment Environment{begin, end, innerMath} els)
-        = begin <> texDocImpl defs (math || innerMath) els <> end
+texDocElement defs math (DocEnvironment Environment{begin, end, args, innerMath} argvs els)
+        = repl begin <> texDocImpl defs (math || innerMath) els <> repl end
+    where repl = replaceArgs args argvs
 texDocElement _ _ (DocString s) = s
 
 texParEl :: Definitions -> Bool -> ParEl -> Text
@@ -296,7 +330,7 @@ pPrefLineEnvironment defs@Definitions{prefs, envs} ind = do
     let pPref = indentGuard sc EQ ind' *> string (name <> " ")
         pEl = do
             ind'' <- indentLevel
-            DocEnvironment env <$> pElements defs ind''
+            DocEnvironment env [] <$> pElements defs ind''
     case group of
         Nothing         -> pEl
         Just groupName  -> do
@@ -305,7 +339,7 @@ pPrefLineEnvironment defs@Definitions{prefs, envs} ind = do
             let els' = case sep of
                         Nothing -> els
                         Just s  -> intersperse (DocString s) els
-            return $ DocEnvironment group els'
+            return $ DocEnvironment group [] els'
 
 pParagraph :: Definitions -> Pos -> Parser DocElement
 pParagraph defs ind = do
@@ -324,14 +358,17 @@ pParLine = some (pText <|> pForm)
               <?> "Inline formula"
         smbl = (`notElem` ['`', '\n'])
 
+pArgV :: ArgType -> Parser ArgV
+pArgV ArgString = ArgVString <$> pStringLiteralL
+
 pEnvironment :: Definitions -> Pos -> Parser DocElement
 pEnvironment defs@Definitions{envs} ind = do
-    name <- try $ do
-        indentGuard sc EQ ind
-        string "@" *> pIdentifierL <* sc <* newline
-    case lookup name envs of
-        Nothing  -> fail $ "Undefined environment " ++ show name
-        Just env -> DocEnvironment env <$> pElements defs (incIndent ind)
+    try $ indentGuard sc EQ ind *> string "@"
+    name <- pIdentifierL
+    env <- lookup name envs `failMsg` ("Undefined environment " ++ show name)
+    args <- mapM pArgV (atype <$> args env)
+    sc <* newline
+    DocEnvironment env args <$> pElements defs (incIndent ind)
 
 pFile :: Definitions -> Parser (Definitions, [DocElement])
 pFile impDefs = do
