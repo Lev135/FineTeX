@@ -1,37 +1,37 @@
 @Import "examples/std.ttex"
 @Define
   @MathCommands
-    <=           = "\leq"
-    >=           = "\geq"
-    !=           = "\neq"
+    <=           = "\\leq"
+    >=           = "\\geq"
+    !=           = "\\neq"
   @Environments
     Lemma       = @TeX "lemma"
     Proof       = @TeX "proof"
     Proposition = @TeX "proposition"
     Corollary   = @TeX "corollary"
   @MathCommands
-    <>           =  "\Diamond" 
-    <0>          =  "\Diamond_0"
-    <1>          =  "\Diamond_1"
-    <*>          =  "\Diamond_*"
-    <t>          =  "\overline{\Diamond}"
-    <a>          =  "\Diamond_a"
-    <b>          =  "\Diamond_b"
-    <x>          =  "\Diamond_\star"
-    []           =  "\Box"
-    [0]          =  "\Box_0"
-    [1]          =  "\Box_1"
-    [*]          =  "\Box_*"
-    [t]          =  "\overline{\Box}"
-    [a]          =  "\Box_a"
-    [b]          =  "\Box_b"
-    ->           =  "\rightarrow"
-    <->          =  "\leftrightarrow"
-    |-           =  "\vdash"
-    |=           =  "\Vdash"
-    \/           =  "\vee"
-    /\           =  "\wedge"
-    ~            =  "\neg"
+    <>           =  "\\Diamond" 
+    <0>          =  "\\Diamond_0"
+    <1>          =  "\\Diamond_1"
+    <*>          =  "\\Diamond_*"
+    <t>          =  "\\overline{\\Diamond}"
+    <a>          =  "\\Diamond_a"
+    <b>          =  "\\Diamond_b"
+    <x>          =  "\\Diamond_\\star"
+    []           =  "\\Box"
+    [0]          =  "\\Box_0"
+    [1]          =  "\\Box_1"
+    [*]          =  "\\Box_*"
+    [t]          =  "\\overline{\\Box}"
+    [a]          =  "\\Box_a"
+    [b]          =  "\\Box_b"
+    ->           =  "\\rightarrow"
+    <->          =  "\\leftrightarrow"
+    |-           =  "\\vdash"
+    |=           =  "\\Vdash"
+    \/           =  "\\vee"
+    /\           =  "\\wedge"
+    ~            =  "\\neg"
 
 \documentclass[12pt,a4paper,oneside]{article}
 \usepackage[left=2cm, right=2cm, top=1.3cm, bottom=2cm]{geometry}
@@ -70,7 +70,7 @@
       - `J |- <0><1>p -> <0><1>(p /\ ~<0><1>p)`\\
         По аксиоме Лёба
           > J |- <0><1>p &-> <0>(<1>p /\ ~<0><1>p)
-            <1>p &-> <1>(p /\ ~<1>p)
+          >         <1>p &-> <1>(p /\ ~<1>p)
         Пользуясь тем, что `J |- ~<0><1>p -> [1](~<0><1>p)` по нормальности получаем требуемое
       - `J |- <1>T /\ <*>p -> <1>T /\ <*>(p /\ (~<1>T \/ ~<*>p))`\\
         Следует из аксиомы Лёба для `<*>`
