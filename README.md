@@ -5,5 +5,5 @@ For running translation execute:
 ```
 
 There is no getting started guide or language documentation yet. 
-It's recommended to read `examples/example.ttex` file.  
-For more complex example see `examples/nibergall.ttex`.
+It's recommended to read [example.ttex](examples/example.ttex) file.  
+For more complex example see [nibergall.ttex](examples/nibergall.ttex).

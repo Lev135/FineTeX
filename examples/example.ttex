@@ -1,19 +1,18 @@
 @Import "examples/std.ttex"
 @Define
-  @Environments
-    Section (name : String) = "\\section{@name}\n" ""
+  @MathCommands
+    <>           =  "\\Diamond" 
+    []           =  "\\Box"
 
-% That was a block of definitions. It should be the first environment in file
-% By this moment there is no way to import definitions from other file
-% so we have to declare all base environments and commands in every file separately
+% That were blocks (environments) of definitions and imports. 
+% They should be in front of all the contents of the file
+% Only definitions are imported from the file  
 
 % Note, that there are no comments in .ttex format by this moment. 
 % These comments are just a paragraph, that will be translated in .tex file 
 % (and then removed during the compilation of .pdf file)
 % As a consequence we can't use comments in @Define environment and 
 % in other places, except those in which paragraphs are allowed.
-% In addition, you cannot use back quotes in them, since they will be parsed
-% as an inline math expression.
 
 % By now we should add \documentclass and \usepackage commands
 % also as a plain text
@@ -31,11 +30,10 @@
   Which continues at the next line
 
   And this is the next paragraph
-  
+
   @Section "Lists" 
-    % By this moment there is no way to take arguments in environment,
-    % so we use a paragraph with TeX command here to start a section
-    @Prefs style is very useful for items. 
+    {}@Prefs style is very useful for items.
+    % Figure brackets line above are inserted to prevent parsing @Prefs as beginning of environment 
     Note that prefs should be indented more then surrounding paragraphs
       - enumerate (this text is in paragraph inside an item):
           # one (it should be more indented then paragraph)
@@ -62,6 +60,7 @@
     Fore block math @Prefs syntax is used: 
       > a + b = c 
     Next lines will be framed by align* environment and \verb.\\. 
+    % \verb is used here to escape LaTeX compilation errors 
     will be added between them automatically
       > a + b     &= c
       > (a + b)^2 &= d
