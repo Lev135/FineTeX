@@ -17,7 +17,7 @@ import Text.Megaparsec.Char.Lexer (indentGuard)
 import Data.Void(Void)
 import Data.Text (Text, pack, unpack)
 import qualified Data.Text as T
-import Control.Monad (void, when, unless)
+import Control.Monad (void, when, unless, join)
 import Control.Applicative ( Alternative(empty, (<|>), some, many) )
 import Data.Maybe (maybeToList, isJust, mapMaybe, fromMaybe)
 import Data.Bifunctor (Bifunctor(second, first))
@@ -78,6 +78,25 @@ tabWidth = 2
 
 incIndent :: Pos -> Pos
 incIndent = mkPos . (+ tabWidth) . unPos
+
+inEnvironment' :: Show el => Text -> Maybe el -> ([el] -> a) -> Parser el -> Parser a
+inEnvironment' name emptyEl f
+    = inArgsEnvironment' name emptyEl (return ()) (const f)
+
+inArgsEnvironment' :: (Show el, Show args) => Text -> Maybe el -> Parser args -> (args -> [el] -> a) -> Parser el -> Parser a
+inArgsEnvironment' name emptyEl pargs f pel
+    = label ("Environment " ++ show name) $ do
+        ind <- try $ do
+            ind <- indentLevel
+            atLexeme name <* sc
+            return ind
+        args <- sc *> pargs <* sc <* newline
+        let checkInd = indentGuard sc GT ind
+            emptyL   = emptyEl <$ sc <* newline <* scn
+        
+        els  <- (try checkInd >> pel `sepBy_` try ((join <$> optional (try emptyL)) <* checkInd))
+            <|> pure [] 
+        return $ f args els
 
 inEnvironment :: Text -> (Pos -> Parser a) -> Pos -> Parser a
 inEnvironment name pa ind
@@ -163,31 +182,21 @@ data Definition
     deriving Show
 
 pDefinitionBlock :: Parser [Definition]
-pDefinitionBlock = skipImps zeroInd *> (fromMaybe [] <$> optional (pDefs zeroInd))
+pDefinitionBlock = skipImps *> (fromMaybe [] <$> optional pDefs)
     where
-        zeroInd = mkPos 1
-        pDefs = inEnvironment "Define" $ concatIndentMany [] $ \ind ->
-                map DefE  <$> pEnvsDef     ind
-            <|> map DefC  <$> pCmdsDef     ind
-            <|> map DefMC <$> pMathCmdsDef ind
-            <|> map DefP  <$> pPrefDef     ind
-        skipImps ind = inArgsEnvironment "Import" pStringLiteralL (const return) ind
+        pDefs = inEnvironment' "Define" Nothing concat pDef
+        ind = undefined
+        pDef  = map DefE  <$> pEnvsDef
+            <|> map DefMC <$> pMathCmdsDef
+            <|> map DefP  <$> pPrefDef
+        skipImps = inArgsEnvironment' "Import" Nothing pStringLiteralL (const $ const ()) (return ()) 
              `sepBy` try (lookAhead (scn *> atLexeme "Import"))
 
-pMathCmdsDef :: Pos -> Parser [Command]
-pMathCmdsDef = inEnvironment "MathCommands"
-    $ indentMany Nothing pCmdDef
-
-pCmdsDef :: Pos -> Parser [Command]
-pCmdsDef = inEnvironment "Commands"
-    $ fail "Non-math commands are not realized yet. Use @MathCmds for commands in Math mode"
-
-pCmdDef :: Pos -> Parser Command
-pCmdDef = noIndent $ do
+pMathCmdsDef :: Parser [Command]
+pMathCmdsDef = inEnvironment' "MathCommands" Nothing id $ do
     name      <- pCommandL
     strLexeme "="
     val       <- pStringLiteralL
-    math      <- isJust <$> optional (atLexeme "Math")
     newline
     return Command{ name, val }
 
@@ -209,9 +218,8 @@ pDefArgs = many $ do
     strLexeme ")"
     return Argument{name, atype}
 
-pEnvsDef :: Pos -> Parser [Environment]
-pEnvsDef = inEnvironment "Environments"
-    $ indentMany Nothing $ noIndent $ do
+pEnvsDef :: Parser [Environment]
+pEnvsDef = inEnvironment' "Environments" Nothing id $ do
         name         <- pIdentifierL
         args         <- pDefArgs
         strLexeme    "="
@@ -226,9 +234,8 @@ pEnvsDef = inEnvironment "Environments"
             return ("\\begin{" <> texI <> "}\n", "\\end{"   <> texI <> "}\n")
         pBeginEnd = (,) <$> pStringLiteralL <*> pStringLiteralL
 
-pPrefDef :: Pos -> Parser [Pref]
-pPrefDef = inEnvironment "Prefs"
-    $ indentMany Nothing $ noIndent $ do
+pPrefDef :: Parser [Pref]
+pPrefDef = inEnvironment' "Prefs" Nothing id $ do
         name      <- pOperatorL
         strLexeme "="
         env       <- pIdentifierL
