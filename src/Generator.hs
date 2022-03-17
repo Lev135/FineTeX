@@ -66,6 +66,17 @@ pOperator = T.cons <$> satisfy (`elem` fstSmbls) <*> takeWhileP Nothing (not . i
         fstSmbls :: [Char]
         fstSmbls = "!#$%^&*-+,./|\\><[]~"
 
+
+pPrefix :: Parser Text
+pPrefix = T.cons <$> satisfy (`elem` fstSmbls) <*> takeWhileP Nothing (\ch -> not $ isSpace ch || isAlphaNum ch)
+    <?> "Prefix"
+    where
+        fstSmbls :: [Char]
+        fstSmbls = "!#$%^*-+,./|\\><[]~"
+
+pPrefixL :: Parser Text
+pPrefixL = lexeme pPrefix 
+
 pOperatorL :: Parser Text
 pOperatorL = lexeme pOperator
 
@@ -199,7 +210,7 @@ pEnvsDef = inEnvironment "Environments" Nothing id $ do
 
 pPrefDef :: Parser [Pref]
 pPrefDef = inEnvironment "Prefs" Nothing id $ do
-        name      <- pOperatorL
+        name      <- pPrefixL
         strLexeme "="
         env       <- pIdentifierL
         (group, sep) <- permute2
@@ -292,7 +303,7 @@ pElement defs
 pPrefLineEnvironment :: Definitions -> Parser DocElement
 pPrefLineEnvironment defs@Definitions{prefs, envs} = do
     ind'     <- indentLevel
-    name     <- try $ pOperator <* string " "
+    name     <- try $ pPrefix <* string " "
     Pref{env = envName, group, sep} <-
         lookup name prefs `failMsg` "Unexpected prefix: " ++ unpack name
     env      <- lookup envName envs `failMsg` "Unrecognized environment " ++ unpack envName
@@ -317,7 +328,7 @@ pParagraph defs = do
     DocParagraph <$> (pParLine `sepBy1` try sep) <* newline
 
 pParLine :: Parser [ParEl]
-pParLine = some (pText <|> pForm)
+pParLine = notFollowedBy (string "@") *> some (pText <|> pForm)
     where
         pText = ParText <$> takeWhile1P Nothing smbl
               <?> "Paragraph text"

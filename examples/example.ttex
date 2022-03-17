@@ -9,8 +9,7 @@
 % Only definitions are imported from the file  
 
 % Note, that there are no comments in .ttex format by this moment. 
-% These comments are just a paragraph, that will be translated in .tex file 
-% (and then removed during the compilation of .pdf file)
+% These comments are just a @Prefix
 % As a consequence we can't use comments in @Define environment and 
 % in other places, except those in which paragraphs are allowed.
 
@@ -24,18 +23,28 @@
 
 @Document
   % Everything here (2 spaces-indented) will be in \begin{document} .. \end{document}
-  % Indentation must be exactly 2 spaces
 
-  This is a simple paragraph
-  Which continues at the next line
+  @Section "Basics"
+    Basic elements of these language are Paragraphs, Environments and Prefs
 
-  And this is the next paragraph
+    @Subsection "Paragraphs"
+      Paragraphs here, as well as in TeX are separated by empty lines:   
+      
+      This is a simple paragraph
+      Which continues at the next line
+
+      And this is the next paragraph
+    
+    @Subsection "Environments"
+    
+    @Subsection "Prefs"
+
 
   @Section "Lists" 
-    {}@Prefs style is very useful for items.
-    % Figure brackets line above are inserted to prevent parsing @Prefs as beginning of environment 
+    \texttt{@Prefs} style is very useful for items.
     Note that prefs should be indented more then surrounding paragraphs
-      - enumerate (this text is in paragraph inside an item):
+      - enumerate (this text is in paragraph inside an item
+        so it can be continued on the next line):
           # one (it should be more indented then paragraph)
           # two
           # three
@@ -45,7 +54,7 @@
           - three
 
     Consecutive elements of the list are framed by the itemize/enumerate environment,
-    if there is no empty lines between them. So:
+    iff there are no empty lines between them. So:
       # one
       # two
       # three
@@ -57,7 +66,7 @@
     Inline math can be inserted in paragraph in back quotes: `a + b = c` 
     --- this is inline math
 
-    For block math @Prefs syntax is used: 
+    For block math \texttt{@Prefs} syntax is used: 
       > a + b = c 
     Next lines will be framed by align* environment and \verb.\\. 
     % \verb is used here to escape LaTeX compilation errors 

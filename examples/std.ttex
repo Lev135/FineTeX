@@ -8,7 +8,8 @@
     AlignS-item    = ""       ""  
     Itemize-item   = "\\item " ""  
     Enumerate-item = "\\item " ""
-    Section (name : String) = "\\section{@name}\n" ""
+    Section    (name : String) = "\\section{@name}\n"    ""
+    Subsection (name : String) = "\\subsection{@name}\n" ""
     Comment-item   = "% " ""
 
   @Prefs
