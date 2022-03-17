@@ -17,7 +17,7 @@ import Text.Megaparsec.Char.Lexer (indentGuard)
 import Data.Void(Void)
 import Data.Text (Text, pack, unpack)
 import qualified Data.Text as T
-import Control.Monad (void, when, unless, join)
+import Control.Monad (void, when, unless, join, guard)
 import Control.Applicative ( Alternative(empty, (<|>), some, many) )
 import Data.Maybe (maybeToList, isJust, mapMaybe, fromMaybe)
 import Data.Bifunctor (Bifunctor(second, first))
@@ -64,7 +64,7 @@ pOperator = T.cons <$> satisfy (`elem` fstSmbls) <*> takeWhileP Nothing (not . i
     <?> "Operator"
     where
         fstSmbls :: [Char]
-        fstSmbls = "!@#$%^&*-+,./|\\><{}[]~"
+        fstSmbls = "!#$%^&*-+,./|\\><[]~"
 
 pOperatorL :: Parser Text
 pOperatorL = lexeme pOperator
@@ -79,69 +79,32 @@ tabWidth = 2
 incIndent :: Pos -> Pos
 incIndent = mkPos . (+ tabWidth) . unPos
 
-inEnvironment' :: Show el => Text -> Maybe el -> ([el] -> a) -> Parser el -> Parser a
-inEnvironment' name emptyEl f
-    = inArgsEnvironment' name emptyEl (return ()) (const f)
+inEnvironment :: Text -> Maybe el -> ([el] -> a) -> Parser el -> Parser a
+inEnvironment name emptyEl f
+    = inArgsEnvironment name emptyEl (return ()) (const f)
 
-inArgsEnvironment' :: (Show el, Show args) => Text -> Maybe el -> Parser args -> (args -> [el] -> a) -> Parser el -> Parser a
-inArgsEnvironment' name emptyEl pargs f pel
+block :: Int -> Maybe el -> ([el] -> a) -> Parser el -> Parser a
+block ind emptyEl f pel = do
+    let checkInd = do
+            ind' <- indentLevel
+            guard (unPos ind' > ind)
+                `failMsg` "Incorrect indentation (should be greater than " <> show ind <> ")"
+        emptyL   = emptyEl <$ sc <* newline <* scn
+    
+    f <$> choice [
+            try checkInd >> pel `sepBy_` try ((join <$> optional (try emptyL)) <* checkInd),
+            pure []
+        ]
+
+inArgsEnvironment :: Text -> Maybe el -> Parser args -> (args -> [el] -> a) -> Parser el -> Parser a
+inArgsEnvironment name emptyEl pargs f pel
     = label ("Environment " ++ show name) $ do
         ind <- try $ do
             ind <- indentLevel
             atLexeme name <* sc
             return ind
         args <- sc *> pargs <* sc <* newline
-        let checkInd = indentGuard sc GT ind
-            emptyL   = emptyEl <$ sc <* newline <* scn
-        
-        els  <- (try checkInd >> pel `sepBy_` try ((join <$> optional (try emptyL)) <* checkInd))
-            <|> pure [] 
-        return $ f args els
-
-inEnvironment :: Text -> (Pos -> Parser a) -> Pos -> Parser a
-inEnvironment name pa ind
-    = label ("Environment '" ++ unpack name ++ "'") $ do
-        try $ do
-            indentGuard sc EQ ind
-            atLexeme name <* sc <* newline
-        pa (incIndent ind)
-
-inArgsEnvironment :: Text -> Parser args -> (args -> Pos -> Parser a) -> Pos -> Parser a
-inArgsEnvironment name pargs pa ind
-    = label ("Environment '" ++ unpack name ++ "'") $ do
-        try $ do
-            indentGuard sc EQ ind
-            atLexeme name
-        args <- pargs
-        sc <* newline
-        pa args (incIndent ind)
-
-inPref :: Text -> (Pos -> Parser a) -> Pos -> Parser a
-inPref name pa ind
-    = label ("Pref '" ++ unpack name ++ "'") $ do
-        try $ indentGuard sc GT ind
-        try $ string $ name <> " "
-        ind' <- indentLevel
-        pa ind'
-
-indentMany :: Maybe a -> (Pos -> Parser a) -> Pos -> Parser [a]
-indentMany emptyL pa ind = pa ind `sepBy_` try sep
-    where
-        sep = lookAhead (scn *> checkIndent) *> pEmptyL <* checkIndent <* notFollowedBy eof
-        checkIndent = do
-            ind' <- indentLevel
-            unless (ind' >= ind)
-                $ fail $ "Incorrect indentation (got "
-                    <> show (unPos ind')
-                    <> " should be greater or equal "
-                    <> show (unPos ind)
-        pEmptyL     = (emptyL <*) <$> (optional . try $ sc <* newline <* scn)
-
-concatIndentMany :: [a] -> (Pos -> Parser [a]) -> Pos -> Parser [a]
-concatIndentMany emptyL pa ind = concat <$> indentMany (Just emptyL) pa ind
-
-noIndent :: Parser a -> Pos -> Parser a
-noIndent a ind = indentGuard sc EQ ind >> a
+        block (unPos ind) emptyEl (f args) pel
 
 data ArgType = ArgString
     deriving Show
@@ -184,16 +147,16 @@ data Definition
 pDefinitionBlock :: Parser [Definition]
 pDefinitionBlock = skipImps *> (fromMaybe [] <$> optional pDefs)
     where
-        pDefs = inEnvironment' "Define" Nothing concat pDef
+        pDefs = inEnvironment "Define" Nothing concat pDef
         ind = undefined
         pDef  = map DefE  <$> pEnvsDef
             <|> map DefMC <$> pMathCmdsDef
             <|> map DefP  <$> pPrefDef
-        skipImps = inArgsEnvironment' "Import" Nothing pStringLiteralL (const $ const ()) (return ()) 
+        skipImps = inArgsEnvironment "Import" Nothing pStringLiteralL (const $ const ()) (return ()) 
              `sepBy` try (lookAhead (scn *> atLexeme "Import"))
 
 pMathCmdsDef :: Parser [Command]
-pMathCmdsDef = inEnvironment' "MathCommands" Nothing id $ do
+pMathCmdsDef = inEnvironment "MathCommands" Nothing id $ do
     name      <- pCommandL
     strLexeme "="
     val       <- pStringLiteralL
@@ -219,7 +182,7 @@ pDefArgs = many $ do
     return Argument{name, atype}
 
 pEnvsDef :: Parser [Environment]
-pEnvsDef = inEnvironment' "Environments" Nothing id $ do
+pEnvsDef = inEnvironment "Environments" Nothing id $ do
         name         <- pIdentifierL
         args         <- pDefArgs
         strLexeme    "="
@@ -235,7 +198,7 @@ pEnvsDef = inEnvironment' "Environments" Nothing id $ do
         pBeginEnd = (,) <$> pStringLiteralL <*> pStringLiteralL
 
 pPrefDef :: Parser [Pref]
-pPrefDef = inEnvironment' "Prefs" Nothing id $ do
+pPrefDef = inEnvironment "Prefs" Nothing id $ do
         name      <- pOperatorL
         strLexeme "="
         env       <- pIdentifierL
@@ -315,29 +278,28 @@ texMath Definitions{mathCmds} = foldr (.) id fs
 
 
 pDocument :: Definitions -> Parser [DocElement]
-pDocument defs = L.nonIndented scn (pElements defs $ mkPos 1) <* scn
+pDocument defs = scn *> pElements 0 defs <* scn
 
-pElements :: Definitions -> Pos -> Parser [DocElement]
-pElements defs = indentMany (Just $ DocString "\n") (pElement defs)
+pElements :: Int -> Definitions -> Parser [DocElement]
+pElements ind defs = block ind (Just $ DocString "\n") id (pElement defs)
 
-pElement :: Definitions -> Pos -> Parser DocElement
-pElement defs ind
-     =  pPrefLineEnvironment defs ind
-    <|> pEnvironment         defs ind
-    <|> pParagraph           defs ind
+pElement :: Definitions -> Parser DocElement
+pElement defs
+     =  pPrefLineEnvironment defs
+    <|> pEnvironment         defs
+    <|> pParagraph           defs
 
-pPrefLineEnvironment :: Definitions -> Pos -> Parser DocElement
-pPrefLineEnvironment defs@Definitions{prefs, envs} ind = do
-    try $ indentGuard sc GT ind
+pPrefLineEnvironment :: Definitions -> Parser DocElement
+pPrefLineEnvironment defs@Definitions{prefs, envs} = do
     ind'     <- indentLevel
-    name     <- pOperator <* string " "
+    name     <- try $ pOperator <* string " "
     Pref{env = envName, group, sep} <-
         lookup name prefs `failMsg` "Unexpected prefix: " ++ unpack name
     env      <- lookup envName envs `failMsg` "Unrecognized environment " ++ unpack envName
     let pPref = indentGuard sc EQ ind' *> string (name <> " ")
         pEl = do
             ind'' <- indentLevel
-            DocEnvironment env [] <$> pElements defs ind''
+            DocEnvironment env [] <$> pElements (unPos ind'' - 1) defs
     case group of
         Nothing         -> pEl
         Just groupName  -> do
@@ -348,12 +310,11 @@ pPrefLineEnvironment defs@Definitions{prefs, envs} ind = do
                         Just s  -> intersperse (DocString s) els
             return $ DocEnvironment group [] els'
 
-pParagraph :: Definitions -> Pos -> Parser DocElement
-pParagraph defs ind = do
-    indentGuard sc EQ ind
+pParagraph :: Definitions -> Parser DocElement
+pParagraph defs = do
+    ind <- indentLevel
+    let sep = newline >> indentGuard sc EQ ind >> notFollowedBy (void newline <|> eof <|> void (string "@"))
     DocParagraph <$> (pParLine `sepBy1` try sep) <* newline
-    where
-        sep = newline >> indentGuard sc EQ ind >> notFollowedBy (void newline <|> eof)
 
 pParLine :: Parser [ParEl]
 pParLine = some (pText <|> pForm)
@@ -368,14 +329,15 @@ pParLine = some (pText <|> pForm)
 pArgV :: ArgType -> Parser ArgV
 pArgV ArgString = ArgVString <$> pStringLiteralL
 
-pEnvironment :: Definitions -> Pos -> Parser DocElement
-pEnvironment defs@Definitions{envs} ind = do
-    try $ indentGuard sc EQ ind *> string "@"
+pEnvironment :: Definitions -> Parser DocElement
+pEnvironment defs@Definitions{envs} = do
+    ind <- indentLevel 
+    try $ string "@"
     name <- pIdentifierL
     env <- lookup name envs `failMsg` ("Undefined environment " ++ show name)
     args <- mapM pArgV (atype <$> args env)
     sc <* newline
-    DocEnvironment env args <$> pElements defs (incIndent ind)
+    DocEnvironment env args <$> pElements (unPos ind) defs 
 
 pFile :: Definitions -> Parser (Definitions, [DocElement])
 pFile impDefs = do

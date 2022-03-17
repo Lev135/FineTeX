@@ -57,7 +57,7 @@
     Inline math can be inserted in paragraph in back quotes: `a + b = c` 
     --- this is inline math
 
-    Fore block math @Prefs syntax is used: 
+    For block math @Prefs syntax is used: 
       > a + b = c 
     Next lines will be framed by align* environment and \verb.\\. 
     % \verb is used here to escape LaTeX compilation errors 

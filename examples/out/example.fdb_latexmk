@@ -1,5 +1,5 @@
 # Fdb version 3
-["pdflatex"] 1647153683 "d:/dvorkin_lev/Haskell/LaTeX-generator/examples/example.tex" "out/example.pdf" "example" 1647153685
+["pdflatex"] 1647490798 "d:/dvorkin_lev/Haskell/LaTeX-generator/examples/example.tex" "out/example.pdf" "example" 1647490799
   "c:/texlive/2021/texmf-dist/fonts/enc/dvips/cm-super/cm-super-ts1.enc" 1641127091 2900 1537cc8184ad1792082cd229ecc269f4 ""
   "c:/texlive/2021/texmf-dist/fonts/map/fontname/texfonts.map" 1641127850 3524 cb3e574dea2d1052e39280babc910dc8 ""
   "c:/texlive/2021/texmf-dist/fonts/tfm/jknappen/ec/tcrm1200.tfm" 1641127526 1536 74b7293ec3713bb7fdca8dd1bd1f469c ""
@@ -45,9 +45,9 @@
   "c:/texlive/2021/texmf-var/fonts/map/pdftex/updmap/pdftex.map" 1641131773 4412718 ada1c61bbfa7db40aae998c8d328ff5e ""
   "c:/texlive/2021/texmf-var/web2c/pdftex/pdflatex.fmt" 1641131896 2820060 152566ac95d544dc20f55bfe85c4dcd2 ""
   "c:/texlive/2021/texmf.cnf" 1641131739 713 e69b156964470283e0530f5060668171 ""
-  "d:/dvorkin_lev/Haskell/LaTeX-generator/examples/example.tex" 1647153682 2374 4cf75dd4d115b11a9d7d3e75561cc4d0 ""
-  "example.tex" 1647153682 2374 4cf75dd4d115b11a9d7d3e75561cc4d0 ""
-  "out/example.aux" 1647153685 217 713972d36cdb66dc58c3061ebca94212 "pdflatex"
+  "d:/dvorkin_lev/Haskell/LaTeX-generator/examples/example.tex" 1647490797 2373 d2d784fcb56255625da2e0d285795246 ""
+  "example.tex" 1647490797 2373 d2d784fcb56255625da2e0d285795246 ""
+  "out/example.aux" 1647490799 217 713972d36cdb66dc58c3061ebca94212 "pdflatex"
   (generated)
   "out/example.aux"
   "out/example.log"

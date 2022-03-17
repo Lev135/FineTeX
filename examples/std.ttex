@@ -9,11 +9,13 @@
     Itemize-item   = "\\item " ""  
     Enumerate-item = "\\item " ""
     Section (name : String) = "\\section{@name}\n" ""
+    Comment-item   = "% " ""
 
   @Prefs
     >              = AlignS-item    @Group AlignS     @Sep "\\\\"
     -              = Itemize-item   @Group Itemize
     #              = Enumerate-item @Group Enumerate
+    %              = Comment-item
   @MathCommands
     <=           = "\\leq"
     >=           = "\\geq"
