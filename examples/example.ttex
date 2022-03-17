@@ -1,4 +1,5 @@
 @Import "examples/std.ttex"
+
 @Define
   @MathCommands
     <>           =  "\\Diamond" 

@@ -156,7 +156,7 @@ data Definition
     deriving Show
 
 pDefinitionBlock :: Parser [Definition]
-pDefinitionBlock = skipImps *> (fromMaybe [] <$> optional pDefs)
+pDefinitionBlock = skipImps *> scn *> (fromMaybe [] <$> optional pDefs)
     where
         pDefs = inEnvironment "Define" Nothing concat pDef
         ind = undefined

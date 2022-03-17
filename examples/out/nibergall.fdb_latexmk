@@ -1,5 +1,5 @@
 # Fdb version 3
-["pdflatex"] 1647463205 "d:/dvorkin_lev/Haskell/LaTeX-generator/examples/nibergall.tex" "out/nibergall.pdf" "nibergall" 1647463206
+["pdflatex"] 1647501024 "d:/dvorkin_lev/Haskell/LaTeX-generator/examples/nibergall.tex" "out/nibergall.pdf" "nibergall" 1647501026
   "c:/Users/lev_1/.texlive2021/texmf-var/fonts/tfm/lh/lh-t2a/labx1200.tfm" 1641134698 3308 eee81981029f67083258db36df06e523 ""
   "c:/Users/lev_1/.texlive2021/texmf-var/fonts/tfm/lh/lh-t2a/larm1200.tfm" 1641132730 3240 c2435f2b5cd66d4930bc29b8df87967e ""
   "c:/Users/lev_1/.texlive2021/texmf-var/fonts/tfm/lh/lh-t2a/lati1200.tfm" 1641134700 3512 f3a56cfe95a159371df20f73d1eb107d ""
@@ -61,9 +61,9 @@
   "c:/texlive/2021/texmf-var/fonts/map/pdftex/updmap/pdftex.map" 1641131773 4412718 ada1c61bbfa7db40aae998c8d328ff5e ""
   "c:/texlive/2021/texmf-var/web2c/pdftex/pdflatex.fmt" 1641131896 2820060 152566ac95d544dc20f55bfe85c4dcd2 ""
   "c:/texlive/2021/texmf.cnf" 1641131739 713 e69b156964470283e0530f5060668171 ""
-  "d:/dvorkin_lev/Haskell/LaTeX-generator/examples/nibergall.tex" 1647463204 10343 0391974edd13d2f6401624b9a50de91e ""
-  "nibergall.tex" 1647463204 10343 0391974edd13d2f6401624b9a50de91e ""
-  "out/nibergall.aux" 1647463206 132 655c6400fc15544b7f70031f0cd5d0d5 "pdflatex"
+  "d:/dvorkin_lev/Haskell/LaTeX-generator/examples/nibergall.tex" 1647501020 10343 0391974edd13d2f6401624b9a50de91e ""
+  "nibergall.tex" 1647501020 10343 0391974edd13d2f6401624b9a50de91e ""
+  "out/nibergall.aux" 1647501026 132 655c6400fc15544b7f70031f0cd5d0d5 "pdflatex"
   (generated)
   "out/nibergall.aux"
   "out/nibergall.log"
