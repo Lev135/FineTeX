@@ -1,9 +1,5 @@
 @Import "examples/std.ttex"
 @Define
-  @MathCommands
-    <=           = "\\leq"
-    >=           = "\\geq"
-    !=           = "\\neq"
   @Environments
     Lemma       = @TexBeginEnd "lemma"
     Proof       = @TexBeginEnd "proof"
