@@ -28,6 +28,9 @@ processFile inpFile outpFile = do
       Left   e             -> putStrLn e
       Right (defs, docEls) -> writeFile outpFile (unpack $ texDoc defs docEls)
 
+processFile' :: FilePath -> IO ()
+processFile' f = processFile (f <> ".ttex") (f <> ".tex")
+
 main :: IO ()
 main = do
     args <- getArgs

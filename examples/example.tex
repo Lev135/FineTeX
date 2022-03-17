@@ -3,8 +3,7 @@
 % Only definitions are imported from the file  
 
 % Note, that there are no comments in .ttex format by this moment. 
-% These comments are just a paragraph, that will be translated in .tex file 
-% (and then removed during the compilation of .pdf file)
+% These comments are just a @Prefix
 % As a consequence we can't use comments in @Define environment and 
 % in other places, except those in which paragraphs are allowed.
 
@@ -17,19 +16,28 @@
 
 \begin{document}
 % Everything here (2 spaces-indented) will be in \begin{document} .. \end{document}
-% Indentation must be exactly 2 spaces
+
+\section{Basics}
+Basic elements of these language are Paragraphs, Environments and Prefs
+
+\subsection{Paragraphs}
+Paragraphs here, as well as in TeX are separated by empty lines:   
 
 This is a simple paragraph
 Which continues at the next line
 
 And this is the next paragraph
 
+\subsection{Environments}
+
+\subsection{Prefs}
+
 \section{Lists}
-{}@Prefs style is very useful for items.
-% Figure brackets line above are inserted to prevent parsing @Prefs as beginning of environment 
+\texttt{@Prefs} style is very useful for items.
 Note that prefs should be indented more then surrounding paragraphs
 \begin{itemize}
-\item enumerate (this text is in paragraph inside an item):
+\item enumerate (this text is in paragraph inside an item
+so it can be continued on the next line):
 \begin{enumerate}
 \item one (it should be more indented then paragraph)
 \item two
@@ -44,7 +52,7 @@ Note that prefs should be indented more then surrounding paragraphs
 \end{itemize}
 
 Consecutive elements of the list are framed by the itemize/enumerate environment,
-if there is no empty lines between them. So:
+iff there are no empty lines between them. So:
 \begin{enumerate}
 \item one
 \item two
@@ -60,7 +68,7 @@ if there is no empty lines between them. So:
 Inline math can be inserted in paragraph in back quotes: $a + b = c$ 
 --- this is inline math
 
-Fore block math @Prefs syntax is used: 
+For block math \texttt{@Prefs} syntax is used: 
 \begin{align*}
 a + b = c 
 \end{align*}
@@ -68,8 +76,8 @@ Next lines will be framed by align* environment and \verb.\\.
 % \verb is used here to escape LaTeX compilation errors 
 will be added between them automatically
 \begin{align*}
-a + b     &= c
-\\(a + b)^2 &= d
+a + b     &= c\\
+(a + b)^2 &= d
 \end{align*}
 
 \begin{align*}

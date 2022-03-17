@@ -43,7 +43,7 @@ J \vdash  \Diamond_* ^2 p \rightarrow  \Diamond_* ^2(p \wedge  \neg \Diamond_* p
 \item $J \vdash  \Diamond_0 \Diamond_1 p \rightarrow  \Diamond_0 \Diamond_1 (p \wedge  \neg \Diamond_0 \Diamond_1 p)$\\
 По аксиоме Лёба
 \begin{align*}
-J \vdash  \Diamond_0 \Diamond_1 p &\rightarrow  \Diamond_0 (\Diamond_1 p \wedge  \neg \Diamond_0 \Diamond_1 p)
+J \vdash  \Diamond_0 \Diamond_1 p &\rightarrow  \Diamond_0 (\Diamond_1 p \wedge  \neg \Diamond_0 \Diamond_1 p)\\
 \Diamond_1 p &\rightarrow  \Diamond_1 (p \wedge  \neg \Diamond_1 p)
 \end{align*}
 Пользуясь тем, что $J \vdash  \neg \Diamond_0 \Diamond_1 p \rightarrow  \Box_1 (\neg \Diamond_0 \Diamond_1 p)$ по нормальности получаем требуемое
@@ -54,10 +54,10 @@ J \vdash  \Diamond_0 \Diamond_1 p &\rightarrow  \Diamond_0 (\Diamond_1 p \wedge 
 
 \begin{lemma}
 \begin{align*}
-J \vdash  &\Diamond \Diamond_* p \rightarrow  \Diamond_* p,     
-\\&\Diamond_* \Diamond_1 p \leftrightarrow  \Diamond_0 \Diamond_1 p,     
-\\&\Diamond_1 \Diamond_0 p \leftrightarrow  \Diamond_1 T \wedge  \Diamond_0 p,
-\\&\Diamond_1 \Diamond_* p \leftrightarrow  \Diamond_1 T \wedge  \Diamond_* p
+J \vdash  &\Diamond \Diamond_* p \rightarrow  \Diamond_* p,     \\
+&\Diamond_* \Diamond_1 p \leftrightarrow  \Diamond_0 \Diamond_1 p,     \\
+&\Diamond_1 \Diamond_0 p \leftrightarrow  \Diamond_1 T \wedge  \Diamond_0 p,\\
+&\Diamond_1 \Diamond_* p \leftrightarrow  \Diamond_1 T \wedge  \Diamond_* p
 \end{align*}
 \end{lemma}
 
@@ -71,14 +71,14 @@ $J \vdash  \Diamond (p \wedge  \Diamond (q \wedge  \Diamond  r)) \rightarrow  \D
 \end{align*}
 
 \begin{align*}
-\Diamond (p \wedge  \Diamond_1 (q \wedge  \Diamond_1 r)) &\rightarrow  \Diamond \Diamond_1 (q \wedge  \Diamond_1 r), \equiv \Diamond_1 ^2(q \wedge  \Diamond_1 r) \vee  \Diamond_* \Diamond_1 (q \wedge  \Diamond_1 r)
-\\\Diamond_1 ^2(q \wedge  \Diamond_1 r) &\rightarrow  \Diamond_1 ^2 q, \rightarrow  \Diamond_1 q \rightarrow  \Diamond q                                              
-\\\Diamond_* \Diamond_1 (q \wedge  \Diamond_1 r) &\leftrightarrow  \Diamond_0 \Diamond_1 (q \wedge  \Diamond_1 r), \rightarrow  \Diamond_0 (q \wedge  \Diamond_1 r), \rightarrow  \Diamond_* q, \rightarrow  \Diamond q              
+\Diamond (p \wedge  \Diamond_1 (q \wedge  \Diamond_1 r)) &\rightarrow  \Diamond \Diamond_1 (q \wedge  \Diamond_1 r), \equiv \Diamond_1 ^2(q \wedge  \Diamond_1 r) \vee  \Diamond_* \Diamond_1 (q \wedge  \Diamond_1 r)\\
+\Diamond_1 ^2(q \wedge  \Diamond_1 r) &\rightarrow  \Diamond_1 ^2 q, \rightarrow  \Diamond_1 q \rightarrow  \Diamond q                                              \\
+\Diamond_* \Diamond_1 (q \wedge  \Diamond_1 r) &\leftrightarrow  \Diamond_0 \Diamond_1 (q \wedge  \Diamond_1 r), \rightarrow  \Diamond_0 (q \wedge  \Diamond_1 r), \rightarrow  \Diamond_* q, \rightarrow  \Diamond q              
 \end{align*}
 
 \begin{align*}
-\Diamond (p \wedge  \Diamond_1 (q \wedge  \Diamond_* r)) &\rightarrow  \Diamond \Diamond_1 \Diamond_* r, \rightarrow  \Diamond_* r, \rightarrow  \Diamond r                                    
-\\\Diamond (p \wedge  \Diamond_1 (q \wedge  \Diamond_* r)) &\rightarrow  \Diamond (p \wedge  \Diamond_1 \Diamond_* r), \Diamond (p \wedge  \Diamond r)                                  
+\Diamond (p \wedge  \Diamond_1 (q \wedge  \Diamond_* r)) &\rightarrow  \Diamond \Diamond_1 \Diamond_* r, \rightarrow  \Diamond_* r, \rightarrow  \Diamond r                                    \\
+\Diamond (p \wedge  \Diamond_1 (q \wedge  \Diamond_* r)) &\rightarrow  \Diamond (p \wedge  \Diamond_1 \Diamond_* r), \Diamond (p \wedge  \Diamond r)                                  
 \end{align*}
 \end{proof}
 \begin{corollary}
@@ -104,15 +104,15 @@ T \vdash  GL(\Diamond_a ), GL(\Diamond_b ), \Diamond_b \Diamond_a p \rightarrow 
 \end{align*}
 Откуда по нормальности, так как $\neg \Diamond_a p \rightarrow  \Box_b \neg \Diamond_a p$
 \begin{align*}
-\Diamond_a (p \wedge  \neg \Diamond_a p \wedge  \Diamond_b p) &\rightarrow  \Diamond_a (p \wedge  \Diamond_b (p \wedge  \neg \Diamond_\star p))
-\\&\rightarrow  \Diamond_a \Diamond_b (p \wedge  \neg \Diamond_\star p),                              
-\\&\rightarrow  \Diamond_\star (p \wedge  \neg \Diamond_\star p)                                                                                 
+\Diamond_a (p \wedge  \neg \Diamond_a p \wedge  \Diamond_b p) &\rightarrow  \Diamond_a (p \wedge  \Diamond_b (p \wedge  \neg \Diamond_\star p))\\
+&\rightarrow  \Diamond_a \Diamond_b (p \wedge  \neg \Diamond_\star p),                              \\
+&\rightarrow  \Diamond_\star (p \wedge  \neg \Diamond_\star p)                                                                                 
 \end{align*}
 Итак, $\Diamond_a p \rightarrow  \Diamond_\star (p \wedge  \neg \Diamond p)$.
 Аналогично получаем
 \begin{align*}
-\neg \Diamond_a p \wedge  \Diamond_b p &\rightarrow  \Box_b \neg \Diamond_a p \wedge  \Diamond_b (p \wedge  \neg \Diamond_b p) 
-\\&\rightarrow  \Diamond_b (p \wedge  \neg \Diamond_\star p)
+\neg \Diamond_a p \wedge  \Diamond_b p &\rightarrow  \Box_b \neg \Diamond_a p \wedge  \Diamond_b (p \wedge  \neg \Diamond_b p) \\
+&\rightarrow  \Diamond_b (p \wedge  \neg \Diamond_\star p)
 \end{align*}
 \end{proof}
 
@@ -121,8 +121,8 @@ $J \vdash  GL(\Diamond ^2\cdot)$
 \end{proposition}
 \begin{proof}
 \begin{align*}
-J \vdash  \Diamond ^2 p &\leftrightarrow  \Diamond_1 \Diamond_1 p \vee  \Diamond_1 \Diamond_* p \vee  \Diamond_* \Diamond_1 p \vee  \Diamond_* \Diamond_* p
-\\&\leftrightarrow  \Diamond_1 T \wedge  \Diamond_* p \vee  \Diamond_0 \Diamond_1 p \vee  \Diamond_* ^2 p 
+J \vdash  \Diamond ^2 p &\leftrightarrow  \Diamond_1 \Diamond_1 p \vee  \Diamond_1 \Diamond_* p \vee  \Diamond_* \Diamond_1 p \vee  \Diamond_* \Diamond_* p\\
+&\leftrightarrow  \Diamond_1 T \wedge  \Diamond_* p \vee  \Diamond_0 \Diamond_1 p \vee  \Diamond_* ^2 p 
 \end{align*}
 Теперь дважды воспользуемся леммой. \\
 Сначала для $\Diamond_a  \equiv \Diamond_0 \Diamond_1 $ и $\Diamond_b  \equiv \Diamond_* ^2$.

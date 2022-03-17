@@ -5,3 +5,9 @@ dist-newstyle/
 .ghc.environment.*
 
 drafts/
+
+examples/out/*.log
+examples/out/*.aux
+examples/out/*.fdb_latexmk
+examples/out/*.fls
+examples/out/*.gz
