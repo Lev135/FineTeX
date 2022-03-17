@@ -3,13 +3,14 @@
 {-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE LambdaCase #-}
 
 module Generator where
 
-import Prelude hiding (readFile)
-import Utils ( sepBy_, failMsg, (.:), withError )
+import Prelude hiding (readFile, fail)
+import Utils ( sepBy_, failMsg, (.:), withError, eitherFail )
 import Text.Megaparsec.Debug
-import Text.Megaparsec(Parsec, MonadParsec (takeWhileP, label, takeWhile1P, try, notFollowedBy, lookAhead, eof), Pos, sepBy1, sepBy, unPos, (<?>), choice, optional, parse, errorBundlePretty, mkPos, satisfy, manyTill)
+import Text.Megaparsec(Parsec, MonadParsec (takeWhileP, label, takeWhile1P, try, notFollowedBy, lookAhead, eof), Pos, sepBy1, sepBy, unPos, (<?>), choice, optional, parse, errorBundlePretty, mkPos, satisfy, manyTill, option)
 import Text.Megaparsec.Char ( char, space1, newline, letterChar, string )
 import qualified Text.Megaparsec.Char.Lexer as L
 import Text.Megaparsec.Char.Lexer (indentGuard)
@@ -17,7 +18,7 @@ import Text.Megaparsec.Char.Lexer (indentGuard)
 import Data.Void(Void)
 import Data.Text (Text, pack, unpack)
 import qualified Data.Text as T
-import Control.Monad (void, when, unless, join, guard)
+import Control.Monad (void, when, unless, join, guard, forM)
 import Control.Applicative ( Alternative(empty, (<|>), some, many) )
 import Data.Maybe (maybeToList, isJust, mapMaybe, fromMaybe)
 import Data.Bifunctor (Bifunctor(second, first))
@@ -26,6 +27,7 @@ import Data.List (intersperse)
 import Control.Monad.Except (MonadError (throwError), MonadIO (liftIO), liftEither)
 import Control.Monad.Catch (MonadCatch, catchIOError)
 import Data.Text.IO (readFile)
+import Control.Monad.Fail (MonadFail (fail))
 
 type Parser = Parsec Void Text
 
@@ -75,7 +77,7 @@ pPrefix = T.cons <$> satisfy (`elem` fstSmbls) <*> takeWhileP Nothing (\ch -> no
         fstSmbls = "!#$%^*-+,./|\\><[]~"
 
 pPrefixL :: Parser Text
-pPrefixL = lexeme pPrefix 
+pPrefixL = lexeme pPrefix
 
 pOperatorL :: Parser Text
 pOperatorL = lexeme pOperator
@@ -101,7 +103,7 @@ block ind emptyEl f pel = do
             guard (unPos ind' > ind)
                 `failMsg` "Incorrect indentation (should be greater than " <> show ind <> ")"
         emptyL   = emptyEl <$ sc <* newline <* scn
-    
+
     f <$> choice [
             try checkInd >> pel `sepBy_` try ((join <$> optional (try emptyL)) <* checkInd),
             pure []
@@ -131,16 +133,17 @@ newtype ArgV = ArgVString Text
     deriving Show
 
 data Environment = Environment {
-        name, begin, end    :: Text,
+        name                :: Text,
+        begin, end          :: Maybe Text,
         args                :: [Argument],
         innerMath           :: Bool
     }
     deriving Show
 data Pref = Pref {
         name        :: Text,
-        env         :: Text,
-        group       :: Maybe Text,
-        sep         :: Maybe Text
+        begin, end  :: Maybe Text,
+        pref,  sep  :: Maybe Text,
+        innerMath   :: Bool
     }
     deriving Show
 data Command  = Command {
@@ -163,7 +166,7 @@ pDefinitionBlock = skipImps *> scn *> (fromMaybe [] <$> optional pDefs)
         pDef  = map DefE  <$> pEnvsDef
             <|> map DefMC <$> pMathCmdsDef
             <|> map DefP  <$> pPrefDef
-        skipImps = inArgsEnvironment "Import" Nothing pStringLiteralL (const $ const ()) (return ()) 
+        skipImps = inArgsEnvironment "Import" Nothing pStringLiteralL (const $ const ()) (return ())
              `sepBy` try (lookAhead (scn *> atLexeme "Import"))
 
 pMathCmdsDef :: Parser [Command]
@@ -180,6 +183,69 @@ permute2 a b = choice [
         (\b a -> (a, b)) <$> b <*> a
     ]
 
+newtype OptParser a = OptParser {
+        runOptParser :: [(Text, Text)] -> Either String ([(Text, Text)], a)
+    }
+instance Functor OptParser where
+    fmap f = OptParser . fmap (fmap (second f)) . runOptParser
+
+instance Applicative OptParser where
+    pure a    = OptParser $ Right . (, a)
+    pf <*> pa = OptParser $ \xs -> do
+        (xs',  f) <- runOptParser pf xs
+        (xs'', a) <- runOptParser pa xs'
+        pure (xs'', f a)
+
+instance Monad OptParser where
+    pa >>= k = OptParser $ \xs -> do
+        (xs', a) <- runOptParser pa xs
+        runOptParser (k a) xs'
+
+instance Alternative OptParser where
+    empty = OptParser $ \xs -> Left mempty
+    pa <|> pa' = OptParser $ \xs ->
+        runOptParser pa xs <|> runOptParser pa' xs
+
+instance MonadFail OptParser where
+    fail e = OptParser $ const (Left e)
+
+
+parseOpts :: OptParser a -> Text -> Either String a
+parseOpts p s = do
+    let xs = second (T.dropWhile isSpace) . T.breakOn " " <$> tail (T.split (=='@') s)
+    checkDistinct $ fst <$> xs
+    h =<< runOptParser p xs
+    where
+        filterEmpty = filter $ \name -> T.all isSpace name
+        h ([],  a) = Right a
+        h ((n, _):_, a) = Left  $ "Unexpected option: " ++ show n
+        checkDistinct [] = Right ()
+        checkDistinct (x : xs) | x `elem` xs = Left $ "Multiple option: " ++ show x
+                               | otherwise   = checkDistinct xs
+
+-- | Strict alternative
+(<||>) :: OptParser a -> OptParser a -> OptParser a
+pa <||> pa' = OptParser $ \xs -> do
+    case (runOptParser pa xs, runOptParser pa' xs) of
+        (Left _, ma) -> ma
+        (ma, Left _) -> ma
+        _            -> Left "Incorrect combination of options"
+
+mkOptP :: Text -> Parser a -> OptParser a
+mkOptP name p = OptParser $ \xs -> case lookup name xs of
+    Nothing  -> Left $ "Option not found: " ++ unpack name
+    Just txt -> case parse (p <* eof) "" txt of
+        Left  e -> Left $ "Error while parsing " ++ unpack name ++ ": " ++ errorBundlePretty e
+        Right a -> Right (filter ((/= name) . fst) xs, a)
+
+pOpts :: OptParser a -> Parser a
+pOpts p = do
+    let getStr = takeWhileP Nothing (/= '\n')
+    optStr <- lookAhead getStr
+    a <- eitherFail $ parseOpts p optStr
+    getStr
+    return a
+
 pType :: Parser ArgType
 pType = ArgString <$ strLexeme "String"
 
@@ -192,32 +258,43 @@ pDefArgs = many $ do
     strLexeme ")"
     return Argument{name, atype}
 
+pBeginEndOpt :: OptParser (Maybe Text, Maybe Text)
+pBeginEndOpt = option (Nothing, Nothing) $ texBEP <||> simpleBEP
+    where
+        beginEndP = texBEP <||> simpleBEP
+        texBEP = do
+            texName <- mkOptP "TexBeginEnd" pStringLiteralL
+            return (Just $ "\\begin{" <> texName <> "}", Just $ "\\end{"   <> texName <> "}")
+        simpleBEP = do
+            begin <- optional $ mkOptP "Begin" pStringLiteralL
+            end   <- optional $ mkOptP "End" pStringLiteralL
+            case (begin, end) of
+                (Nothing, Nothing) -> fail "No @Begin @End"
+                _ -> return (begin, end)
+
 pEnvsDef :: Parser [Environment]
 pEnvsDef = inEnvironment "Environments" Nothing id $ do
         name         <- pIdentifierL
         args         <- pDefArgs
         strLexeme    "="
-        (begin, end) <- pTeX <|> pBeginEnd
-        innerMath <- isJust <$> optional (atLexeme "Math")
+        ((begin, end), innerMath) <- pOpts $ (,) <$> pBeginEndOpt <*> mathP
         newline
         return Environment{ name, begin, end, args, innerMath }
     where
-        pTeX = do
-            atLexeme "TeX"
-            texI <- pStringLiteralL
-            return ("\\begin{" <> texI <> "}\n", "\\end{"   <> texI <> "}\n")
-        pBeginEnd = (,) <$> pStringLiteralL <*> pStringLiteralL
+        mathP = isJust <$> optional (mkOptP "Math" (return ()))
 
 pPrefDef :: Parser [Pref]
 pPrefDef = inEnvironment "Prefs" Nothing id $ do
         name      <- pPrefixL
         strLexeme "="
-        env       <- pIdentifierL
-        (group, sep) <- permute2
-                (optional $ atLexeme "Group" *> pIdentifierL   )
-                (optional $ atLexeme "Sep"   *> pStringLiteralL)
+        ((begin, end), pref, sep, innerMath) <- pOpts
+                    $ (,,,) <$> pBeginEndOpt <*> prefP <*> sepP <*> mathP
         newline
-        return Pref{name, env, group, sep}
+        return Pref{name, begin, end, pref, sep, innerMath}
+    where
+        prefP = optional (mkOptP "Pref" pStringLiteralL)
+        sepP  = optional (mkOptP "Sep"  pStringLiteralL)
+        mathP = isJust <$> optional (mkOptP "Math" (return ()))
 
 data Definitions = Definitions {
         envs         :: [(Text, Environment)],
@@ -249,6 +326,7 @@ processDef (DefP pr@Pref{name})
 data DocElement
     = DocParagraph     [[ParEl]]
     | DocEnvironment   Environment [ArgV] [DocElement]
+    | DocPrefGroup     Pref [[DocElement]]
     | DocString        Text
     deriving Show
 
@@ -258,24 +336,39 @@ data ParEl
     deriving Show
 
 texDoc :: Definitions -> [DocElement] -> Text
-texDoc = flip texDocImpl False
+texDoc defs = (<> "\n") . texDocImpl defs False
 
 texDocImpl :: Definitions -> Bool -> [DocElement] -> Text
-texDocImpl defs math = T.concat . map (texDocElement defs math)
+texDocImpl defs math = T.intercalate "\n" . map (texDocElement defs math)
 
 
 replaceArgs :: [Argument] -> [ArgV] -> Text -> Text
 replaceArgs args argvs = foldr (.) id (zipWith h args argvs)
     where
-        h Argument{name} (ArgVString s) = T.replace ("@" <> name) s
+        h Argument{name} (ArgVString s) = T.replace ("$" <> name) s
+
+surround :: Maybe Text -> Maybe Text -> Bool -> Text -> Text
+surround begin end empty txt = b <> txt <> e
+    where
+        b = fromMaybe T.empty $ if empty then begin else (<> "\n") <$> begin
+        e = maybe T.empty ("\n" <> ) end
 
 texDocElement :: Definitions -> Bool -> DocElement -> Text
 texDocElement defs math (DocParagraph els)
-        = T.unlines $ map (mconcat . map (texParEl defs math)) els
+        = T.intercalate "\n" $ map (mconcat . map (texParEl defs math)) els
 texDocElement defs math (DocEnvironment Environment{begin, end, args, innerMath} argvs els)
-        = repl begin <> texDocImpl defs (math || innerMath) els <> repl end
-    where repl = replaceArgs args argvs
-texDocElement _ _ (DocString s) = s
+        = surround (repl <$> begin) (repl <$> end) (null els)
+            $ texDocImpl defs (math || innerMath) els
+    where
+        repl = replaceArgs args argvs
+texDocElement defs math (DocPrefGroup Pref{begin, end, pref, sep, innerMath} els)
+        = surround begin end (null els) bodyS
+    where
+        unM = fromMaybe T.empty
+        sep'  = fromMaybe T.empty sep <> "\n"
+        pref' = maybe T.empty (<> " ") pref
+        bodyS = T.intercalate sep' ((pref' <>) . texDocImpl defs (math || innerMath) <$> els)
+texDocElement _ _ (DocString s) = ""
 
 texParEl :: Definitions -> Bool -> ParEl -> Text
 texParEl _    False (ParText    t) = t
@@ -302,24 +395,15 @@ pElement defs
 
 pPrefLineEnvironment :: Definitions -> Parser DocElement
 pPrefLineEnvironment defs@Definitions{prefs, envs} = do
-    ind'     <- indentLevel
-    name     <- try $ pPrefix <* string " "
-    Pref{env = envName, group, sep} <-
-        lookup name prefs `failMsg` "Unexpected prefix: " ++ unpack name
-    env      <- lookup envName envs `failMsg` "Unrecognized environment " ++ unpack envName
+    ind'  <- indentLevel
+    name  <- try $ pPrefix <* string " "
+    pref  <- lookup name prefs `failMsg` "Unexpected prefix: " ++ unpack name
     let pPref = indentGuard sc EQ ind' *> string (name <> " ")
         pEl = do
             ind'' <- indentLevel
-            DocEnvironment env [] <$> pElements (unPos ind'' - 1) defs
-    case group of
-        Nothing         -> pEl
-        Just groupName  -> do
-            group <- lookup groupName envs `failMsg` "Unrecognized group environment " ++ unpack groupName
-            els   <- pEl `sepBy` try pPref
-            let els' = case sep of
-                        Nothing -> els
-                        Just s  -> intersperse (DocString s) els
-            return $ DocEnvironment group [] els'
+            pElements (unPos ind'' - 1) defs
+    els   <- pEl `sepBy` try pPref
+    return $ DocPrefGroup pref els
 
 pParagraph :: Definitions -> Parser DocElement
 pParagraph defs = do
@@ -342,13 +426,13 @@ pArgV ArgString = ArgVString <$> pStringLiteralL
 
 pEnvironment :: Definitions -> Parser DocElement
 pEnvironment defs@Definitions{envs} = do
-    ind <- indentLevel 
+    ind <- indentLevel
     try $ string "@"
     name <- pIdentifierL
     env <- lookup name envs `failMsg` ("Undefined environment " ++ show name)
     args <- mapM pArgV (atype <$> args env)
     sc <* newline
-    DocEnvironment env args <$> pElements (unPos ind) defs 
+    DocEnvironment env args <$> pElements (unPos ind) defs
 
 pFile :: Definitions -> Parser (Definitions, [DocElement])
 pFile impDefs = do

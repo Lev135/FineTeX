@@ -1,22 +1,15 @@
 @Define
   @Environments
-    Document       = @TeX "document"
-    Equation       = @TeX "equation" @Math
-    AlignS         = @TeX "align*"   @Math 
-    Itemize        = @TeX "itemize"
-    Enumerate      = @TeX "enumerate"
-    AlignS-item    = ""       ""  
-    Itemize-item   = "\\item " ""  
-    Enumerate-item = "\\item " ""
-    Section    (name : String) = "\\section{@name}\n"    ""
-    Subsection (name : String) = "\\subsection{@name}\n" ""
-    Comment-item   = "% " ""
+    Document       = @TexBeginEnd "document"
+    Equation       = @TexBeginEnd "equation" @Math
+    Section    (name : String) = @Begin "\\section{$name}"
+    Subsection (name : String) = @Begin "\\subsection{$name}"
 
   @Prefs
-    >              = AlignS-item    @Group AlignS     @Sep "\\\\"
-    -              = Itemize-item   @Group Itemize
-    #              = Enumerate-item @Group Enumerate
-    %              = Comment-item
+    >              = @TexBeginEnd "align*"    @Math  @Sep "\\\\"
+    -              = @TexBeginEnd "itemize"   @Pref "\\item"
+    #              = @TexBeginEnd "enumerate" @Pref "\\item"
+    %              = @Pref "%"
   @MathCommands
     <=           = "\\leq"
     >=           = "\\geq"

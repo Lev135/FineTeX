@@ -13,6 +13,10 @@ failMsg :: MonadFail m => Maybe a -> String -> m a
 failMsg Nothing err = fail err
 failMsg (Just x) _  = return x
 
+eitherFail :: MonadFail m => Either String a -> m a
+eitherFail (Left  e) = fail   e
+eitherFail (Right a) = return a
+
 infix 4 `failMsg`
 
 -- | Update the second component of a pair.
