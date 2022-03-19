@@ -86,12 +86,6 @@ pCommandL :: Parser Text
 pCommandL = pOperatorL <|> pIdentifierL
     <?> "Command"
 
-tabWidth :: Int
-tabWidth = 2
-
-incIndent :: Pos -> Pos
-incIndent = mkPos . (+ tabWidth) . unPos
-
 inEnvironment :: Text -> Maybe el -> ([el] -> a) -> Parser el -> Parser a
 inEnvironment name emptyEl f
     = inArgsEnvironment name emptyEl (return ()) (const f)
@@ -162,7 +156,6 @@ pDefinitionBlock :: Parser [Definition]
 pDefinitionBlock = skipImps *> scn *> (fromMaybe [] <$> optional pDefs)
     where
         pDefs = inEnvironment "Define" Nothing concat pDef
-        ind = undefined
         pDef  = map DefE  <$> pEnvsDef
             <|> map DefMC <$> pMathCmdsDef
             <|> map DefP  <$> pPrefDef
@@ -176,12 +169,6 @@ pMathCmdsDef = inEnvironment "MathCommands" Nothing id $ do
     val       <- pStringLiteralL
     newline
     return Command{ name, val }
-
-permute2 :: Alternative m => m a -> m b -> m (a, b)
-permute2 a b = choice [
-        (,) <$> a <*> b,
-        (\b a -> (a, b)) <$> b <*> a
-    ]
 
 newtype OptParser a = OptParser {
         runOptParser :: [(Text, Text)] -> Either String ([(Text, Text)], a)
@@ -202,7 +189,7 @@ instance Monad OptParser where
         runOptParser (k a) xs'
 
 instance Alternative OptParser where
-    empty = OptParser $ \xs -> Left mempty
+    empty = OptParser $ \xs -> Left "empty"
     pa <|> pa' = OptParser $ \xs ->
         runOptParser pa xs <|> runOptParser pa' xs
 
@@ -229,11 +216,13 @@ pa <||> pa' = OptParser $ \xs -> do
     case (runOptParser pa xs, runOptParser pa' xs) of
         (Left _, ma) -> ma
         (ma, Left _) -> ma
+        -- TODO : describe options
         _            -> Left "Incorrect combination of options"
 
 mkOptP :: Text -> Parser a -> OptParser a
 mkOptP name p = OptParser $ \xs -> case lookup name xs of
     Nothing  -> Left $ "Option not found: " ++ unpack name
+    -- TODO : correct position in inner parser
     Just txt -> case parse (p <* eof) "" txt of
         Left  e -> Left $ "Error while parsing " ++ unpack name ++ ": " ++ errorBundlePretty e
         Right a -> Right (filter ((/= name) . fst) xs, a)
@@ -335,6 +324,8 @@ data ParEl
     | ParFormula Text
     deriving Show
 
+-- TODO : use pretty-print
+
 texDoc :: Definitions -> [DocElement] -> Text
 texDoc defs = (<> "\n") . texDocImpl defs False
 
@@ -368,7 +359,8 @@ texDocElement defs math (DocPrefGroup Pref{begin, end, pref, sep, innerMath} els
         sep'  = fromMaybe T.empty sep <> "\n"
         pref' = maybe T.empty (<> " ") pref
         bodyS = T.intercalate sep' ((pref' <>) . texDocImpl defs (math || innerMath) <$> els)
-texDocElement _ _ (DocString s) = ""
+-- TODO : DocString _ --> EmptyLine 
+texDocElement _ _ (DocString _) = ""
 
 texParEl :: Definitions -> Bool -> ParEl -> Text
 texParEl _    False (ParText    t) = t
