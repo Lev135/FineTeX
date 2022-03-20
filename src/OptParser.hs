@@ -1,3 +1,4 @@
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 module OptParser (
     OptParser (..), (<||>), mkOptP, pOpts
 ) where
@@ -10,65 +11,51 @@ import Data.Void (Void)
 import Data.Bifunctor (Bifunctor(second))
 import Data.Char (isSpace)
 import Utils (eitherFail)
+import Control.Monad.State (StateT (StateT, runStateT), MonadTrans (lift))
 
 type Parser = Parsec Void Text
 
 newtype OptParser a = OptParser {
-        runOptParser :: [(Text, Text)] -> Either String ([(Text, Text)], a)
+        runOptParser :: StateT [(Text, Text)] (Either String) a
     }
-instance Functor OptParser where
-    fmap f = OptParser . fmap (fmap (second f)) . runOptParser
-
-instance Applicative OptParser where
-    pure a    = OptParser $ Right . (, a)
-    pf <*> pa = OptParser $ \xs -> do
-        (xs',  f) <- runOptParser pf xs
-        (xs'', a) <- runOptParser pa xs'
-        pure (xs'', f a)
-
-instance Monad OptParser where
-    pa >>= k = OptParser $ \xs -> do
-        (xs', a) <- runOptParser pa xs
-        runOptParser (k a) xs'
-
-instance Alternative OptParser where
-    empty = OptParser $ \xs -> Left "empty"
-    pa <|> pa' = OptParser $ \xs ->
-        runOptParser pa xs <|> runOptParser pa' xs
+    deriving (Functor, Applicative, Monad, Alternative)
 
 instance MonadFail OptParser where
-    fail e = OptParser $ const (Left e)
+    fail e = OptParser $ lift (Left e)
 
+parseOptions :: OptParser a -> [(Text, Text)] -> Either String (a, [(Text, Text)])
+parseOptions pa = runStateT (runOptParser pa)  
 
 parseText :: OptParser a -> Text -> Either String a
 parseText p s = do
     let xs = second (T.dropWhile isSpace) . T.breakOn " " <$> tail (T.split (=='@') s)
     checkDistinct $ fst <$> xs
-    h =<< runOptParser p xs
+    (a, xs') <- parseOptions p xs
+    checkEmpty xs'
+    return a 
     where
-        filterEmpty = filter $ \name -> T.all isSpace name
-        h ([],  a) = Right a
-        h ((n, _):_, a) = Left  $ "Unexpected option: " ++ show n
+        checkEmpty [] = Right ()
+        checkEmpty ((n, _):_) = Left  $ "Unexpected option: " ++ show n
         checkDistinct [] = Right ()
         checkDistinct (x : xs) | x `elem` xs = Left $ "Multiple option: " ++ show x
                                | otherwise   = checkDistinct xs
-
+-- StateT s m a -> s -> m a
 -- | Strict alternative
 (<||>) :: OptParser a -> OptParser a -> OptParser a
-pa <||> pa' = OptParser $ \xs -> do
-    case (runOptParser pa xs, runOptParser pa' xs) of
+pa <||> pa' = OptParser $ StateT $ \xs -> 
+    case (parseOptions pa xs, parseOptions pa' xs) of
         (Left _, ma) -> ma
         (ma, Left _) -> ma
         -- TODO : describe options
         _            -> Left "Incorrect combination of options"
 
 mkOptP :: Text -> Parser a -> OptParser a
-mkOptP name p = OptParser $ \xs -> case lookup name xs of
+mkOptP name p = OptParser $ StateT $ \xs -> case lookup name xs of
     Nothing  -> Left $ "Option not found: " ++ T.unpack name
     -- TODO : correct position in inner parser
     Just txt -> case parse (p <* eof) "" txt of
         Left  e -> Left $ "Error while parsing " ++ T.unpack name ++ ": " ++ errorBundlePretty e
-        Right a -> Right (filter ((/= name) . fst) xs, a)
+        Right a -> Right (a, filter ((/= name) . fst) xs)
 
 pOpts :: OptParser a -> Parser a
 pOpts p = do
