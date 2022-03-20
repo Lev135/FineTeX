@@ -316,7 +316,7 @@ data DocElement
     = DocParagraph     [[ParEl]]
     | DocEnvironment   Environment [ArgV] [DocElement]
     | DocPrefGroup     Pref [[DocElement]]
-    | DocString        Text
+    | DocEmptyLine
     deriving Show
 
 data ParEl
@@ -359,8 +359,7 @@ texDocElement defs math (DocPrefGroup Pref{begin, end, pref, sep, innerMath} els
         sep'  = fromMaybe T.empty sep <> "\n"
         pref' = maybe T.empty (<> " ") pref
         bodyS = T.intercalate sep' ((pref' <>) . texDocImpl defs (math || innerMath) <$> els)
--- TODO : DocString _ --> EmptyLine 
-texDocElement _ _ (DocString _) = ""
+texDocElement _ _ DocEmptyLine = ""
 
 texParEl :: Definitions -> Bool -> ParEl -> Text
 texParEl _    False (ParText    t) = t
@@ -377,7 +376,7 @@ pDocument :: Definitions -> Parser [DocElement]
 pDocument defs = scn *> pElements 0 defs <* scn
 
 pElements :: Int -> Definitions -> Parser [DocElement]
-pElements ind defs = block ind (Just $ DocString "\n") id (pElement defs)
+pElements ind defs = block ind (Just $ DocEmptyLine) id (pElement defs)
 
 pElement :: Definitions -> Parser DocElement
 pElement defs
