@@ -1,4 +1,3 @@
-{-# LANGUAGE TupleSections #-}
 module Utils where
 import Data.Maybe (mapMaybe, maybeToList)
 import Control.Applicative (Alternative ((<|>), many))

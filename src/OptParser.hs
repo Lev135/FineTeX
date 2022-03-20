@@ -1,6 +1,3 @@
-{-# LANGUAGE TupleSections #-}
-{-# LANGUAGE OverloadedStrings #-}
-
 module OptParser (
     OptParser (..), (<||>), mkOptP, pOpts
 ) where
