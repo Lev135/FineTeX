@@ -3,6 +3,9 @@ import Data.Maybe (mapMaybe, maybeToList)
 import Control.Applicative (Alternative ((<|>), many))
 import Control.Monad.Fail (MonadFail)
 import Control.Monad.Except (MonadError (throwError, catchError))
+import qualified Data.Map.Merge.Strict as M
+import qualified Data.Map.Strict as M
+
 
 (.:) :: Functor f => (b -> c) -> (a -> f b) -> a -> f c
 f .: g = fmap f . g
@@ -48,3 +51,10 @@ sepBy1_ p sep = (:) <$> p <*> (
 
 withError :: MonadError e m => (e -> e) -> m a -> m a
 withError f ma = catchError ma (throwError . f)
+
+-- | unite Maps with side effects
+unionWithA :: (Ord k, Applicative m) => (a -> a -> m a) -> M.Map k a -> M.Map k a -> m (M.Map k a)
+unionWithA g = M.mergeA hMiss hMiss hMatched
+    where
+        hMiss       = M.mapMissing $ const id
+        hMatched    = M.zipWithAMatched $ const g
