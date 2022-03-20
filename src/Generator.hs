@@ -295,6 +295,7 @@ pPrefLineEnvironment defs@Definitions{prefs} = do
     els   <- pEl `sepBy` try pPref
     return $ DocPrefGroup pref els
 
+-- TODO its not uses defs
 pParagraph :: Definitions -> Parser DocElement
 pParagraph defs = do
     ind <- indentLevel
