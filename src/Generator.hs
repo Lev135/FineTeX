@@ -22,6 +22,7 @@ import Control.Monad.Except (MonadError (throwError), MonadIO (liftIO), liftEith
 import Control.Monad.Catch (MonadCatch, catchIOError)
 import Data.Text.IO (readFile)
 import Control.Monad.Fail (MonadFail (fail))
+import qualified Data.Map as M
 
 -- Primitives
 
@@ -115,14 +116,17 @@ data ArgType = ArgString
     deriving Show
 type ArgName = Text
 
+
 data Argument = Argument {
             atype :: ArgType,
             name  :: ArgName
         }
     deriving Show
 
+
 newtype ArgV = ArgVString Text
     deriving Show
+
 
 data Environment = Environment {
         name                :: Text,
@@ -131,6 +135,8 @@ data Environment = Environment {
         innerMath           :: Bool
     }
     deriving Show
+
+
 data Pref = Pref {
         name        :: Text,
         begin, end  :: Maybe Text,
@@ -138,10 +144,13 @@ data Pref = Pref {
         innerMath   :: Bool
     }
     deriving Show
+
+
 data Command  = Command {
         name, val   :: Text
     }
     deriving Show
+
 
 data Definition
     = DefE  Environment
@@ -149,6 +158,7 @@ data Definition
     | DefC  Command
     | DefP  Pref
     deriving Show
+
 
 pDefinitionBlock :: Parser [Definition]
 pDefinitionBlock = skipImps *> scn *> (fromMaybe [] <$> optional pDefs)
@@ -221,10 +231,10 @@ pPrefDef = inEnvironment "Prefs" Nothing id $ do
 -- Processing definitions
 
 data Definitions = Definitions {
-        envs         :: [(Text, Environment)],
-        cmds         :: [(Text, Command)],
-        mathCmds     :: [(Text, Command)],
-        prefs        :: [(Text, Pref)]
+        envs         :: M.Map Text Environment,
+        cmds         :: M.Map Text Command,
+        mathCmds     :: M.Map Text Command,
+        prefs        :: M.Map Text Pref
     }
     deriving Show
 
@@ -232,20 +242,20 @@ instance Semigroup Definitions where
     (Definitions a b c d) <> (Definitions a' b' c' d')
         = Definitions (a <> a') (b <> b') (c <> c') (d <> d')
 instance Monoid Definitions where
-    mempty = Definitions [] [] [] []
+    mempty = Definitions M.empty M.empty M.empty M.empty 
 
 processDefs :: [Definition] -> Definitions
 processDefs = mconcat . map processDef
 
 processDef :: Definition -> Definitions
 processDef (DefE env@Environment{name, begin, end, innerMath})
-    = mempty { envs     = [(name, env)] }
+    = mempty { envs     = M.singleton name env }
 processDef (DefC cmd@Command{name})
-    = mempty { cmds     = [(name, cmd)] }
+    = mempty { cmds     = M.singleton name cmd }
 processDef (DefMC cmd@Command{name})
-    = mempty { mathCmds = [(name, cmd)] }
+    = mempty { mathCmds = M.singleton name cmd }
 processDef (DefP pr@Pref{name})
-    = mempty {prefs     = [(name, pr)]}
+    = mempty {prefs     = M.singleton name pr  }
 
 -- Document body
 
@@ -265,7 +275,7 @@ pDocument :: Definitions -> Parser [DocElement]
 pDocument defs = scn *> pElements 0 defs <* scn
 
 pElements :: Int -> Definitions -> Parser [DocElement]
-pElements ind defs = block ind (Just $ DocEmptyLine) id (pElement defs)
+pElements ind defs = block ind (Just DocEmptyLine) id (pElement defs)
 
 pElement :: Definitions -> Parser DocElement
 pElement defs
@@ -274,10 +284,10 @@ pElement defs
     <|> pParagraph           defs
 
 pPrefLineEnvironment :: Definitions -> Parser DocElement
-pPrefLineEnvironment defs@Definitions{prefs, envs} = do
+pPrefLineEnvironment defs@Definitions{prefs} = do
     ind'  <- indentLevel
     name  <- try $ pPrefix <* string " "
-    pref  <- lookup name prefs `failMsg` "Unexpected prefix: " ++ unpack name
+    pref  <- M.lookup name prefs `failMsg` "Unexpected prefix: " ++ unpack name
     let pPref = indentGuard sc EQ ind' *> string (name <> " ")
         pEl = do
             ind'' <- indentLevel
@@ -309,7 +319,7 @@ pEnvironment defs@Definitions{envs} = do
     ind <- indentLevel
     try $ string "@"
     name <- pIdentifierL
-    env <- lookup name envs `failMsg` ("Undefined environment " ++ show name)
+    env <- M.lookup name envs `failMsg` ("Undefined environment " ++ show name)
     args <- mapM pArgV (atype <$> args env)
     sc <* newline
     DocEnvironment env args <$> pElements (unPos ind) defs
@@ -389,4 +399,10 @@ texParEl defs True  (ParFormula t) = texMath defs t
 
 texMath :: Definitions -> Text -> Text
 texMath Definitions{mathCmds} = foldr (.) id fs
-    where fs = map (uncurry T.replace . second ((<>" ") . val)) mathCmds
+    where 
+        fs = map (pairReplace . secondCmdToText) (M.toList mathCmds)
+        cmdToText = (<>" ") . val
+        secondCmdToText = second cmdToText
+        pairReplace = uncurry T.replace
+
+
