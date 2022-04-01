@@ -2,7 +2,7 @@ module Generator where
 
 import Prelude hiding (readFile, fail)
 import Utils ( sepBy_, failMsg, (.:), withError, eitherFail )
-import OptParser ( OptParser, (<||>), mkOptP, pOpts )
+import OptParser ( OptParser, (<||>), (<??>), mkOptP, toParsec )
 import Text.Megaparsec.Debug
 import Text.Megaparsec(Parsec, MonadParsec (takeWhileP, label, takeWhile1P, try, notFollowedBy, lookAhead, eof), Pos, sepBy1, sepBy, unPos, (<?>), choice, optional, parse, errorBundlePretty, mkPos, satisfy, manyTill, option)
 import Text.Megaparsec.Char ( char, space1, newline, letterChar, string )
@@ -181,9 +181,8 @@ pDefArgs = many $ do
     return Argument{name, atype}
 
 pBeginEndOpt :: OptParser (Maybe Text, Maybe Text)
-pBeginEndOpt = option (Nothing, Nothing) $ texBEP <||> simpleBEP
+pBeginEndOpt = option (Nothing, Nothing) $ texBEP <||> simpleBEP <??> ["@TexBeginEnd", "@Begin @End"]
     where
-        beginEndP = texBEP <||> simpleBEP
         texBEP = do
             texName <- mkOptP "TexBeginEnd" pStringLiteralL
             return (Just $ "\\begin{" <> texName <> "}", Just $ "\\end{"   <> texName <> "}")
@@ -191,15 +190,21 @@ pBeginEndOpt = option (Nothing, Nothing) $ texBEP <||> simpleBEP
             begin <- optional $ mkOptP "Begin" pStringLiteralL
             end   <- optional $ mkOptP "End" pStringLiteralL
             case (begin, end) of
-                (Nothing, Nothing) -> fail "No @Begin @End"
+                (Nothing, Nothing) -> empty
                 _ -> return (begin, end)
+
+pOpt :: OptParser a -> Parser a
+pOpt = toParsec optNameP optArgsConsumer
+    where
+        optNameP = try (string "@") >> pIdentifierL
+        optArgsConsumer = takeWhileP Nothing (`notElem` ['@', '\n'])
 
 pEnvsDef :: Parser [Environment]
 pEnvsDef = inEnvironment "Environments" Nothing id $ do
         name         <- pIdentifierL
         args         <- pDefArgs
         strLexeme    "="
-        ((begin, end), innerMath) <- pOpts $ (,) <$> pBeginEndOpt <*> mathP
+        ((begin, end), innerMath) <- pOpt $ (,) <$> pBeginEndOpt <*> mathP
         newline
         return Environment{ name, begin, end, args, innerMath }
     where
@@ -209,7 +214,7 @@ pPrefDef :: Parser [Pref]
 pPrefDef = inEnvironment "Prefs" Nothing id $ do
         name      <- pPrefixL
         strLexeme "="
-        ((begin, end), pref, sep, innerMath) <- pOpts
+        ((begin, end), pref, sep, innerMath) <- pOpt 
                     $ (,,,) <$> pBeginEndOpt <*> prefP <*> sepP <*> mathP
         newline
         return Pref{name, begin, end, pref, sep, innerMath}
