@@ -2,7 +2,7 @@ module Generator where
 
 import Prelude hiding (readFile, fail)
 import Utils ( sepBy_, failMsg, (.:), withError, eitherFail )
-import OptParser ( OptParser, (<||>), mkOptP, toParsec )
+import OptParser ( OptParser, (<||>), (<??>), mkOptP, toParsec )
 import Text.Megaparsec.Debug
 import Text.Megaparsec(Parsec, MonadParsec (takeWhileP, label, takeWhile1P, try, notFollowedBy, lookAhead, eof), Pos, sepBy1, sepBy, unPos, (<?>), choice, optional, parse, errorBundlePretty, mkPos, satisfy, manyTill, option)
 import Text.Megaparsec.Char ( char, space1, newline, letterChar, string )
@@ -181,9 +181,8 @@ pDefArgs = many $ do
     return Argument{name, atype}
 
 pBeginEndOpt :: OptParser (Maybe Text, Maybe Text)
-pBeginEndOpt = option (Nothing, Nothing) $ texBEP <||> simpleBEP
+pBeginEndOpt = option (Nothing, Nothing) $ texBEP <||> simpleBEP <??> ["@TexBeginEnd", "@Begin @End"]
     where
-        beginEndP = texBEP <||> simpleBEP
         texBEP = do
             texName <- mkOptP "TexBeginEnd" pStringLiteralL
             return (Just $ "\\begin{" <> texName <> "}", Just $ "\\end{"   <> texName <> "}")
