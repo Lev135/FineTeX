@@ -8,7 +8,11 @@ import Control.Applicative (Alternative (empty, (<|>), many))
 import Control.Monad.Fail (MonadFail (fail))
 import Data.Text (Text)
 import qualified Data.Text as T
-import Text.Megaparsec (Parsec, errorBundlePretty, parse, MonadParsec (eof, takeWhileP, lookAhead), SourcePos, getSourcePos, ParseErrorBundle)
+import Text.Megaparsec (Parsec, errorBundlePretty, parse,
+    MonadParsec (eof, takeWhileP, lookAhead),
+    SourcePos, getSourcePos,
+    PosState(pstateSourcePos),
+    ParseErrorBundle (ParseErrorBundle), region)
 import Data.Void (Void)
 import Data.Bifunctor (Bifunctor(second, first))
 import Data.Char (isSpace)
@@ -101,7 +105,9 @@ toParsec optNameP optArgsConsumer optP = do
         mkErrMsg (IncorrectCombination opts)    = "Incorrect combination of options: " <> optsStr <> " cannot be used at once"
             where optsStr = intercalate ", " opts 
         mkErrMsg (NotFoundOption name)          = "Option not found: " <> T.unpack name
-        mkErrMsg (ArgParsingError n OptVal{args, pos} e) = "Error while parsing arguments: " <> errorBundlePretty e
+        mkErrMsg (ArgParsingError n OptVal{pos} e) = "Error while parsing arguments: " <> errorBundlePretty (h e pos)
+            where
+                h (ParseErrorBundle e s) pos = ParseErrorBundle e s{pstateSourcePos  = pos}
         
         checkDistinct [] = return ()
         checkDistinct (x : xs) | x `elem` xs = fail $ "Multiple option: " ++ show x
