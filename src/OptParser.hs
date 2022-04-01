@@ -1,4 +1,5 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE GADTs #-}
 module OptParser (
     OptParser (..), (<||>), (<??>), mkOptP, toParsec
 ) where
@@ -9,28 +10,31 @@ import Control.Monad.Fail (MonadFail (fail))
 import Data.Text (Text)
 import qualified Data.Text as T
 import Text.Megaparsec (Parsec, errorBundlePretty, parse,
-    MonadParsec (eof, takeWhileP, lookAhead),
+    MonadParsec (eof, takeWhileP, lookAhead, parseError),
     SourcePos, getSourcePos,
-    PosState(pstateSourcePos),
-    ParseErrorBundle (ParseErrorBundle), region)
+    PosState(pstateSourcePos, pstateOffset),
+    ParseErrorBundle (ParseErrorBundle, bundlePosState), region, ParseError (TrivialError), getOffset, ErrorItem (Label), manyTill)
 import Data.Void (Void)
 import Data.Bifunctor (Bifunctor(second, first))
 import Data.Char (isSpace)
 import Utils (eitherFail)
 import Control.Monad.State (StateT (StateT, runStateT))
 import Control.Monad.Trans ( MonadTrans(lift) ) 
-import Text.Megaparsec.Char (string)
+import Text.Megaparsec.Char (string, newline)
 import Control.Monad.Except (MonadError (throwError))
 import Data.Either.Extra (maybeToEither)
 import Data.List ( intercalate )
+import qualified Data.List.NonEmpty as NE
+import Data.List.NonEmpty (fromList)
 
 type Parser = Parsec Void Text
 
 type OptName = Text
 
 data OptVal = OptVal {
-        args  :: Text,
-        pos   :: SourcePos 
+        args        :: Text,
+        nameOffset  :: Int,
+        offset      :: Int
     }
 
 data OptParserError
@@ -89,25 +93,29 @@ mkOptP name p = OptParser $ StateT $ \opts -> do
 
 toParsec :: Parser OptName -> Parser Text -> OptParser a -> Parser a
 toParsec optNameP optArgsConsumer optP = do
-    opts <- many $ do
-        name <- optNameP
-        pos  <- getSourcePos
-        args <- optArgsConsumer
-        return (name, OptVal{pos, args})
+    opts <- flip manyTill (lookAhead newline) $ do
+        nameOffset  <- getOffset 
+        name        <- optNameP
+        offset      <- getOffset
+        args        <- optArgsConsumer
+        return (name, OptVal{nameOffset, offset, args})
     checkDistinct (fst <$> opts)
-    (a, opts') <- either (fail . mkErrMsg) pure $ parseOptions optP opts
+    (a, opts') <- either mkErr pure $ parseOptions optP opts
     case opts' of
-        []            -> return a
-        (name, _) : _ -> fail $ "Unknown option: " ++ show name
+        []                          -> return a
+        (name, OptVal{nameOffset}) : _  -> let lbl = Label . fromList $ "option '" <> T.unpack name <> "'"
+                    in parseError $ TrivialError nameOffset (Just lbl) mempty
     where
-        mkErrMsg :: OptParserError -> String
-        mkErrMsg Empty                          = "empty"
-        mkErrMsg (IncorrectCombination opts)    = "Incorrect combination of options: " <> optsStr <> " cannot be used at once"
+        mkErr Empty                          = fail   "empty"
+        mkErr (IncorrectCombination opts)    = fail $ "Incorrect combination of options: " <> optsStr <> " cannot be used at once"
             where optsStr = intercalate ", " opts 
-        mkErrMsg (NotFoundOption name)          = "Option not found: " <> T.unpack name
-        mkErrMsg (ArgParsingError n OptVal{pos} e) = "Error while parsing arguments: " <> errorBundlePretty (h e pos)
+        mkErr (NotFoundOption name)          = fail $ "Option not found: " <> T.unpack name
+        mkErr (ArgParsingError n OptVal{offset} e) = parseError (h e offset)
             where
-                h (ParseErrorBundle e s) pos = ParseErrorBundle e s{pstateSourcePos  = pos}
+                h (ParseErrorBundle es s) offset = incOffset offset $ NE.head es
+        
+        incOffset pos (TrivialError p a b) = TrivialError (p + pos) a b
+        incOffset _ _ = undefined
         
         checkDistinct [] = return ()
         checkDistinct (x : xs) | x `elem` xs = fail $ "Multiple option: " ++ show x
