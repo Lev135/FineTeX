@@ -1,6 +1,7 @@
 module Main where
 
 import Generator
+import Printing
 import Data.Text(Text, pack, unpack)
 import Text.Megaparsec (parse, errorBundlePretty, MonadParsec (eof), mkPos, Pos)
 import System.Environment (getArgs)
