@@ -33,7 +33,7 @@ surround begin end empty txt = h begin $+$ hNest txt $+$ h end
 
 texDocElement :: Definitions -> Bool -> DocElement -> Doc
 texDocElement defs math (DocParagraph els)
-        = P.sep $ map (P.hsep . map (texParEl defs math)) els
+        = P.fsep $ map (P.fsep . map (texParEl defs math)) els
 texDocElement defs math (DocEnvironment Environment{begin, end, args, innerMath} argvs els)
         = surround (repl <$> begin) (repl <$> end) (null els)
             $ texDocImpl defs (math || innerMath) els
@@ -50,10 +50,12 @@ texDocElement _ _ DocEmptyLine = ""
 
 texParEl :: Definitions -> Bool -> ParEl -> Doc
 texParEl _    False (ParText    t) = text (T.unpack t)
-texParEl defs False (ParFormula t) = "$" <> texMath defs t <> "$"
-texParEl defs True  (ParText    t) = texMath defs t
-texParEl defs True  (ParFormula t) = texMath defs t
+texParEl defs False (ParFormula t) = text (T.unpack $ "$" <> t' <> "$")
+    where t' = texMath defs t
+texParEl defs True  (ParText    t) = text (T.unpack $ texMath defs t)
+texParEl defs True  (ParFormula t) = text (T.unpack $ texMath defs t)
 
-texMath :: Definitions -> Text -> Doc
-texMath Definitions{mathCmds} = text . T.unpack . foldr (.) id fs
+texMath :: Definitions -> Text -> Text
+texMath Definitions{mathCmds} = foldr (.) id fs
     where fs = map (uncurry T.replace . second ((<>" ") . val)) mathCmds
+

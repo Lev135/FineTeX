@@ -6,7 +6,7 @@ import Data.Text(Text, pack, unpack)
 import Text.Megaparsec (parse, errorBundlePretty, MonadParsec (eof), mkPos, Pos)
 import System.Environment (getArgs)
 import Control.Monad.Except (ExceptT(ExceptT), runExceptT)
-import Text.PrettyPrint (render)
+import Text.PrettyPrint (render, renderStyle, style, Style(..))
 
 parsePart :: Parser a -> Text -> Either String a
 parsePart p s = case parse p "" s of
@@ -28,7 +28,7 @@ processFile inpFile outpFile = do
     res <- runExceptT (readDoc inpFile :: ExceptT String IO (Definitions, [DocElement]))
     case res of
       Left   e             -> putStrLn e
-      Right (defs, docEls) -> writeFile outpFile (render $ texDoc defs docEls)
+      Right (defs, docEls) -> writeFile outpFile (renderStyle (style{lineLength = 200}) $ texDoc defs docEls)
 
 processFile' :: FilePath -> IO ()
 processFile' f = processFile (f <> ".ttex") (f <> ".tex")

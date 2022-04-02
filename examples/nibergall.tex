@@ -1,29 +1,26 @@
-\documentclass[12pt,a4paper,oneside]{article}
-\usepackage[left=2cm, right=2cm, top=1.3cm, bottom=2cm]{geometry}
-\usepackage[utf8]{inputenc}
-\usepackage[russian]{babel}
-\usepackage{amsthm}
-\usepackage{amsmath}
-\usepackage{amssymb}
+\documentclass[12pt,a4paper,oneside]{article} \usepackage[left=2cm, right=2cm, top=1.3cm, bottom=2cm]{geometry}
+\usepackage[utf8]{inputenc} \usepackage[russian]{babel} \usepackage{amsthm} \usepackage{amsmath} \usepackage{amssymb}
 
-\newtheorem{definition}{Определение}
-\newtheorem{theorem}{Теорема}
-\newtheorem{proposition}{Предложение}
-\newtheorem{lemma}{Лемма}
-\newtheorem*{corollary}{Следствие}
+\newtheorem{definition}{Определение} \newtheorem{theorem}{Теорема} \newtheorem{proposition}{Предложение}
+\newtheorem{lemma}{Лемма} \newtheorem*{corollary}{Следствие}
 
 \begin{document}
   Обозначения модальностей:
   \begin{itemize}
     \item $\Diamond_0 $  и  $\Diamond_1 $  -- модальности  $GLB$ ,  $J$
-    \item $\Diamond_* A := \Diamond_0 (\Diamond_1 T \wedge  A)$  -- доказуемость в предположении 1-непротиворечивости
-    \item $\Diamond A  := \Diamond_1 A \vee  \Diamond_* A$  -- доказуемость арифметики Нибергаля относительно PA
+    \item $\Diamond_* A := \Diamond_0 (\Diamond_1 T \wedge  A)$
+           -- доказуемость в предположении 1-непротиворечивости
+    \item $\Diamond A  := \Diamond_1 A \vee  \Diamond_* A$
+           -- доказуемость арифметики Нибергаля относительно PA
   \end{itemize}
   
   \begin{lemma}
-    $J \vdash  K(\Diamond ), GL(\Diamond_* ), GL(\Diamond_* ^2), GL(\Diamond_0 \Diamond_1 \cdot), GL(\Diamond_1 T \wedge  \Diamond_* \cdot)$ \\
-    Под этой записью мы подразумеваем, что в  $J$  доказываются аксиомы соответствующих теорий
-    и усиление по соответствующей модальности является допустимым правилом вывода в  $J$ .
+    $J \vdash  K(\Diamond ), GL(\Diamond_* ), GL(\Diamond_* ^2), GL(\Diamond_0 \Diamond_1 \cdot), GL(\Diamond_1 T \wedge  \Diamond_* \cdot)$
+    \\
+    Под этой записью мы подразумеваем, что в  $J$
+     доказываются аксиомы соответствующих теорий
+    и усиление по соответствующей модальности является допустимым правилом вывода в 
+    $J$ .
   \end{lemma}
   \begin{proof}
     Докажем выводимость аксиом Лёба. 
@@ -33,7 +30,8 @@
             \begin{align*}
               J \vdash  \Diamond_0 (\Diamond_1 T \wedge  p) \rightarrow  \Diamond_0 (\Diamond_1 T \wedge  p \wedge  \neg \Diamond_0 (\Diamond_1 T \wedge  p))
             \end{align*}
-            с точностью до обозначения  $\Diamond_* \cdot = \Diamond_0 (\Diamond_1 T \wedge  \cdot)$  это и есть требуемое
+            с точностью до обозначения  $\Diamond_* \cdot = \Diamond_0 (\Diamond_1 T \wedge  \cdot)$
+             это и есть требуемое
       \item $J \vdash  \Diamond_* ^2 p \rightarrow  \Diamond_* ^2(p \wedge  \neg \Diamond_* ^2 p)$ \\
             Из предыдущего пункта, пользуясь нормальностью  $\Diamond_* $ :
             \begin{align*}
@@ -46,8 +44,10 @@
               J \vdash  \Diamond_0 \Diamond_1 p &\rightarrow  \Diamond_0 (\Diamond_1 p \wedge  \neg \Diamond_0 \Diamond_1 p)\\
               \Diamond_1 p &\rightarrow  \Diamond_1 (p \wedge  \neg \Diamond_1 p)
             \end{align*}
-            Пользуясь тем, что  $J \vdash  \neg \Diamond_0 \Diamond_1 p \rightarrow  \Box_1 (\neg \Diamond_0 \Diamond_1 p)$  по нормальности получаем требуемое
-      \item $J \vdash  \Diamond_1 T \wedge  \Diamond_* p \rightarrow  \Diamond_1 T \wedge  \Diamond_* (p \wedge  (\neg \Diamond_1 T \vee  \neg \Diamond_* p))$ \\
+            Пользуясь тем, что  $J \vdash  \neg \Diamond_0 \Diamond_1 p \rightarrow  \Box_1 (\neg \Diamond_0 \Diamond_1 p)$
+             по нормальности получаем требуемое
+      \item $J \vdash  \Diamond_1 T \wedge  \Diamond_* p \rightarrow  \Diamond_1 T \wedge  \Diamond_* (p \wedge  (\neg \Diamond_1 T \vee  \neg \Diamond_* p))$
+            \\
             Следует из аксиомы Лёба для  $\Diamond_* $
     \end{itemize}
   \end{proof}
@@ -86,15 +86,15 @@
   \end{corollary}
   
   \begin{lemma}
-    Пусть  $\Diamond_a $  и  $\Diamond_b $  --- модальности логики  $T$ ,  $\Diamond_\star A \equiv \Diamond_a A \vee  \Diamond_b A$ .
+    Пусть  $\Diamond_a $  и  $\Diamond_b $  --- модальности логики  $T$ , 
+    $\Diamond_\star A \equiv \Diamond_a A \vee  \Diamond_b A$ .
     \begin{align*}
       T \vdash  GL(\Diamond_a ), GL(\Diamond_b ), \Diamond_b \Diamond_a p \rightarrow  \Diamond_a p, \Diamond_a \Diamond_b p \rightarrow  \Diamond_\star p 
     \end{align*}
     Тогда  $T \vdash  GL(\Diamond_\star )$
   \end{lemma}
   \begin{proof}
-    Нормальность очевидна. \\ 
-    Из аксиомы Лёба для  $\Diamond_a $
+    Нормальность очевидна. \\  Из аксиомы Лёба для  $\Diamond_a $
     \begin{align*}
       \Diamond_a p \rightarrow  \Diamond_a (p \wedge  \neg \Diamond_\star p) \vee  \Diamond_a (p \wedge  \neg \Diamond_a p \wedge  \Diamond_b p)
     \end{align*}
@@ -108,8 +108,7 @@
       &\rightarrow  \Diamond_a \Diamond_b (p \wedge  \neg \Diamond_\star p),                              \\
       &\rightarrow  \Diamond_\star (p \wedge  \neg \Diamond_\star p)                                                                                 
     \end{align*}
-    Итак,  $\Diamond_a p \rightarrow  \Diamond_\star (p \wedge  \neg \Diamond p)$ .
-    Аналогично получаем
+    Итак,  $\Diamond_a p \rightarrow  \Diamond_\star (p \wedge  \neg \Diamond p)$ . Аналогично получаем
     \begin{align*}
       \neg \Diamond_a p \wedge  \Diamond_b p &\rightarrow  \Box_b \neg \Diamond_a p \wedge  \Diamond_b (p \wedge  \neg \Diamond_b p) \\
       &\rightarrow  \Diamond_b (p \wedge  \neg \Diamond_\star p)
@@ -130,7 +129,8 @@
       \item $J \vdash  \Diamond_* ^2\Diamond_0 \Diamond_1 p \rightarrow  \Diamond_0 ^3\Diamond_1 p, \rightarrow  \Diamond_0 \Diamond_1 p$
       \item $J \vdash  \Diamond_0 \Diamond_1 \Diamond_* ^2 p \rightarrow  \Diamond_* p$
     \end{itemize}
-    Осталось применить ту же лемму для  $\Diamond_a  \equiv \Diamond_1 T \wedge  \Diamond_* \cdot$  и  $\Diamond_b  \equiv \Diamond_0 \Diamond_1 \cdot \vee  \Diamond_* ^2\cdot$ .
+    Осталось применить ту же лемму для  $\Diamond_a  \equiv \Diamond_1 T \wedge  \Diamond_* \cdot$  и 
+    $\Diamond_b  \equiv \Diamond_0 \Diamond_1 \cdot \vee  \Diamond_* ^2\cdot$ .
     \begin{itemize}
       \item $J \vdash  \Diamond_1 T \wedge  \Diamond_* (\Diamond_0 \Diamond_1 p \vee  \Diamond_* ^2 p) \rightarrow  \Diamond_0 \Diamond_0 \Diamond_1 p \vee  \Diamond_0 \Diamond_* ^2 p, \rightarrow  \Diamond_0 \Diamond_1 p \vee  \Diamond_* ^2 p$
       \item $J \vdash  \Diamond_0 \Diamond_1 (\Diamond_1 T \wedge  \Diamond_* p) \vee  \Diamond_* ^2 (\Diamond_1 T \wedge  \Diamond_* p) \rightarrow  \Diamond_0 \Diamond_1 \Diamond_* p \vee  \Diamond_* ^3 p, \rightarrow  \Diamond_0 \Diamond_1 p \vee  \Diamond_* ^2 p$
@@ -145,13 +145,15 @@
     \end{itemize}
   \end{corollary}
   \begin{proof}
-    То, что  $J \vdash  GL(\Diamond \cdot \vee  \Diamond ^2\cdot)$  является следствием следующих пунктов
+    То, что  $J \vdash  GL(\Diamond \cdot \vee  \Diamond ^2\cdot)$
+     является следствием следующих пунктов
     \begin{itemize}
       \item Используя предыдущее предложение и нормальность
             \begin{align*}
               J \vdash  \Diamond ^2 p \rightarrow  \Diamond ^2(p \wedge  \neg \Diamond p \wedge  \neg \Diamond ^2 p) \vee  \Diamond ^2(p \wedge  \Diamond p \wedge  \neg \Diamond ^2 p)
             \end{align*}
-            Так как  $J \vdash  \Diamond ^3 p \rightarrow  \Diamond ^2 p$  и  $K(\Diamond ) \vdash  \Diamond p \wedge  \neg \Diamond ^2 p \wedge  \neg \Diamond ^3 p \rightarrow  \Diamond (p \wedge  \neg \Diamond p \wedge  \neg \Diamond ^2 p)$
+            Так как  $J \vdash  \Diamond ^3 p \rightarrow  \Diamond ^2 p$  и 
+            $K(\Diamond ) \vdash  \Diamond p \wedge  \neg \Diamond ^2 p \wedge  \neg \Diamond ^3 p \rightarrow  \Diamond (p \wedge  \neg \Diamond p \wedge  \neg \Diamond ^2 p)$
             \begin{align*}
               J \vdash  \Diamond ^2(p \wedge  \Diamond p \wedge  \neg \Diamond ^2 p) \rightarrow  \Diamond ^2\Diamond (p \wedge  \neg \Diamond p \wedge  \neg \Diamond ^2 p), \rightarrow  \Diamond ^2(p \wedge  \neg \Diamond p \wedge  \neg \Diamond ^2 p)
             \end{align*}
@@ -159,7 +161,8 @@
             \begin{align*}
               K(\Diamond ) \vdash  \Diamond p \rightarrow  \Diamond (p \wedge  \neg \Diamond p \wedge  \neg \Diamond ^2 p) \vee  \Diamond ^2 p \vee  \Diamond ^3 p
             \end{align*}
-            Откуда пользуясь тем, что  $J \vdash  \Diamond ^3 p \rightarrow  \Diamond ^2 p$  получаем требуемое
+            Откуда пользуясь тем, что  $J \vdash  \Diamond ^3 p \rightarrow  \Diamond ^2 p$
+             получаем требуемое
     \end{itemize}
   \end{proof}
 \end{document}
