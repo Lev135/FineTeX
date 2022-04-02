@@ -1,20 +1,7 @@
-% That were blocks (environments) of definitions and imports.
-% They should be in front of all the contents of the file
-% Only definitions are imported from import files
-
-% Note, that there are no comments in .ttex format by this moment.
-% These comments are just a @Prefix
-% As a consequence we can't use comments in @Define environment and
-% in other places, except those in which paragraphs are allowed.
-
-% By now we should add \documentclass and \usepackage commands
-% also as a plain text
 \documentclass[12pt,a4paper,oneside]{article} \usepackage[utf8]{inputenc} \usepackage{amsmath}
 \usepackage{amssymb}
 
 \begin{document}
-  % Everything here (2 spaces-indented) will be in \begin{document} .. \end{document}
-
   \section{Basics}
     Basic elements of these language are Paragraphs, Environments and Prefs
 
@@ -70,8 +57,8 @@
     \begin{align*}
       a + b = c
     \end{align*}
-    Next lines will be framed by align* environment and \verb.\\. % \verb is used here to escape
-    LaTeX compilation errors will be added between them automatically
+    Next lines will be framed by align* environment and \verb.\\. will be added between them
+    automatically
     \begin{align*}
       a + b &= c\\
       (a + b)^2 &= d
@@ -82,6 +69,12 @@
     \end{align*}
     Note that the last equation will framed by separate align*, because there is an empty line
     before it.
+
+  \section{Known bugs and strange features}
+    Comments collapse paragraphs:
+
+    This is the first paragraph And this is not the second, but also the first... And this is too...
+    Very strange
 
   To be continued...
 \end{document}

@@ -27,11 +27,14 @@ import Data.Text.Encoding (decodeUtf8)
 
 type Parser = Parsec Void Text
 
+lineComment :: Parser ()
+lineComment = void $ char '%' *> manyTill (satisfy (const True)) eol <* scn
+
 sc :: Parser ()
-sc = L.space (void . some $ char ' ' <|> char '\t') empty empty
+sc = L.space (void . some $ char ' ' <|> char '\t') lineComment empty
 
 scn :: Parser ()
-scn = L.space space1 empty empty
+scn = L.space space1 lineComment empty
 
 indentLevel :: Parser Pos
 indentLevel = sc *> L.indentLevel
@@ -197,7 +200,7 @@ pOpt :: OptParser a -> Parser a
 pOpt = toParsec optNameP optArgsConsumer
     where
         optNameP = try (string "@") >> pIdentifierL
-        optArgsConsumer = takeWhileP Nothing (`notElem` ['@', '\n', '\r'])
+        optArgsConsumer = takeWhileP Nothing (`notElem` ['@', '\n', '\r', '%'])
 
 pEnvsDef :: Parser [Environment]
 pEnvsDef = inEnvironment "Environments" Nothing id $ do
@@ -297,14 +300,14 @@ pParagraph defs = do
     DocParagraph <$> (pParLine `sepBy1` try sep) <* eol
 
 pParLine :: Parser [ParEl]
-pParLine = notFollowedBy (string "@") *> some (pText <|> pForm)
+pParLine = notFollowedBy (string "@") *> some ((pText <|> pForm) <* sc)
     where
         pText = ParText <$> (T.words <$> takeWhile1P Nothing smbl)
               <?> "Paragraph text"
         pForm = ParFormula
               <$> (char '`' *> (T.words <$> takeWhile1P Nothing smbl) <* char '`')
               <?> "Inline formula"
-        smbl = (`notElem` ['`', '\n'])
+        smbl = (`notElem` ['`', '\n', '%'])
 
 pArgV :: ArgType -> Parser ArgV
 pArgV ArgString = ArgVString <$> pStringLiteralL

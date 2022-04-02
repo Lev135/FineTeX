@@ -9,7 +9,6 @@
     >              = @TexBeginEnd "align*"    @Math  @Sep "\\\\"
     -              = @TexBeginEnd "itemize"   @Pref "\\item"
     #              = @TexBeginEnd "enumerate" @Pref "\\item"
-    %              = @Pref "%"
   @MathCommands
     <=           = "\\leq"
     >=           = "\\geq"

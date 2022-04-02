@@ -9,13 +9,8 @@
 % They should be in front of all the contents of the file
 % Only definitions are imported from import files 
 
-% Note, that there are no comments in .ttex format by this moment. 
-% These comments are just a @Prefix
-% As a consequence we can't use comments in @Define environment and 
-% in other places, except those in which paragraphs are allowed.
-
 % By now we should add \documentclass and \usepackage commands
-% also as a plain text
+% as a plain text (it will be fixed in the nearest future)
 \documentclass[12pt,a4paper,oneside]{article}
 \usepackage[utf8]{inputenc}
 \usepackage{amsmath}
@@ -78,5 +73,16 @@
       > a + b + c &= 0
     Note that the last equation will framed by separate align*, because
     there is an empty line before it. 
+
+  @Section "Known bugs and strange features"
+    Comments collapse paragraphs:
+
+    This is the first paragraph % with comment
+
+    And this is not the second, but also the first...
+    % comment
+
+
+    And this is too... Very strange
 
   To be continued... 
