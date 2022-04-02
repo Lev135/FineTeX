@@ -19,7 +19,6 @@
 
 @Document
   % Everything here (2 spaces-indented) will be in \begin{document} .. \end{document}
-
   @Section "Basics"
     Basic elements of these language are Paragraphs, Environments and Prefs
 
@@ -74,15 +73,6 @@
     Note that the last equation will framed by separate align*, because
     there is an empty line before it. 
 
+  To be continued...
   @Section "Known bugs and strange features"
-    Comments collapse paragraphs:
-
-    This is the first paragraph % with comment
-
-    And this is not the second, but also the first...
-    % comment
-
-
-    And this is too... Very strange
-
-  To be continued... 
+    There is nothing here at this moment

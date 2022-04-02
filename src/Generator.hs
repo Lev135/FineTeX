@@ -27,11 +27,22 @@ import Data.Text.Encoding (decodeUtf8)
 
 type Parser = Parsec Void Text
 
+lineComment' :: Parser ()
+lineComment' = do
+    char '%' 
+    manyTill (satisfy (const True)) (lookAhead eol)
+    void . optional . try $ do
+        eol *> many (char ' ' <|> char '\t')
+        lineComment'
+
 lineComment :: Parser ()
-lineComment = void $ char '%' *> manyTill (satisfy (const True)) eol <* scn
+lineComment = void $ char '%' *> manyTill (satisfy (const True)) eol <* sc
 
 sc :: Parser ()
 sc = L.space (void . some $ char ' ' <|> char '\t') lineComment empty
+
+sc' :: Parser ()
+sc' = L.space (void . some $ char ' ' <|> char '\t') lineComment' empty
 
 scn :: Parser ()
 scn = L.space space1 lineComment empty
@@ -89,13 +100,15 @@ inEnvironment :: Text -> Maybe el -> ([el] -> a) -> Parser el -> Parser a
 inEnvironment name emptyEl f
     = inArgsEnvironment name emptyEl (return ()) (const f)
 
+eol' = eol <* sc
+
 block :: Int -> Maybe el -> ([el] -> a) -> Parser el -> Parser a
 block ind emptyEl f pel = do
     let checkInd = do
             ind' <- indentLevel
             guard (unPos ind' > ind)
                 `failMsg` "Incorrect indentation (should be greater than " <> show ind <> ")"
-        emptyL   = emptyEl <$ sc <* eol <* scn
+        emptyL   = emptyEl <$ sc <* eol' <* scn
 
     f <$> choice [
             try checkInd >> pel `sepBy_` try ((join <$> optional (try emptyL)) <* checkInd),
@@ -109,7 +122,7 @@ inArgsEnvironment name emptyEl pargs f pel
             ind <- indentLevel
             atLexeme name <* sc
             return ind
-        args <- sc *> pargs <* sc <* eol
+        args <- sc *> pargs <* sc <* eol' <* sc
         block (unPos ind) emptyEl (f args) pel
 
 -- Definition block
@@ -168,7 +181,7 @@ pMathCmdsDef = inEnvironment "MathCommands" Nothing id $ do
     name      <- pCommandL
     strLexeme "="
     val       <- pStringLiteralL
-    eol
+    eol'
     return Command{ name, val }
 
 pType :: Parser ArgType
@@ -208,7 +221,7 @@ pEnvsDef = inEnvironment "Environments" Nothing id $ do
         args         <- pDefArgs
         strLexeme    "="
         ((begin, end), innerMath) <- pOpt $ (,) <$> pBeginEndOpt <*> mathP
-        eol
+        eol'
         return Environment{ name, begin, end, args, innerMath }
     where
         mathP = isJust <$> optional (mkOptP "Math" (return ()))
@@ -219,7 +232,7 @@ pPrefDef = inEnvironment "Prefs" Nothing id $ do
         strLexeme "="
         ((begin, end), pref, sep, innerMath) <- pOpt
                     $ (,,,) <$> pBeginEndOpt <*> prefP <*> sepP <*> mathP
-        eol
+        eol'
         return Pref{name, begin, end, pref, sep, innerMath}
     where
         prefP = optional (mkOptP "Pref" pStringLiteralL)
@@ -296,11 +309,11 @@ pPrefLineEnvironment defs@Definitions{prefs, envs} = do
 pParagraph :: Definitions -> Parser DocElement
 pParagraph defs = do
     ind <- indentLevel
-    let sep = eol >> indentGuard sc EQ ind >> notFollowedBy (void eol <|> eof <|> void (string "@"))
-    DocParagraph <$> (pParLine `sepBy1` try sep) <* eol
+    let sep = eol' >> indentGuard sc EQ ind >> notFollowedBy (void eol' <|> eof <|> void (string "@"))
+    DocParagraph <$> (pParLine `sepBy1` try sep) <* eol'
 
 pParLine :: Parser [ParEl]
-pParLine = notFollowedBy (string "@") *> some ((pText <|> pForm) <* sc)
+pParLine = notFollowedBy (string "@") *> some ((pText <|> pForm) <* sc')
     where
         pText = ParText <$> (T.words <$> takeWhile1P Nothing smbl)
               <?> "Paragraph text"
@@ -319,7 +332,7 @@ pEnvironment defs@Definitions{envs} = do
     name <- pIdentifierL
     env <- lookup name envs `failMsg` ("Undefined environment " ++ show name)
     args <- mapM pArgV (atype <$> args env)
-    sc <* eol
+    sc <* eol'
     DocEnvironment env args <$> pElements (unPos ind) defs
 
 -- File readers and parsers
