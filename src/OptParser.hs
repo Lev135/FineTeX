@@ -20,7 +20,7 @@ import Data.Char (isSpace)
 import Utils (eitherFail)
 import Control.Monad.State (StateT (StateT, runStateT))
 import Control.Monad.Trans ( MonadTrans(lift) ) 
-import Text.Megaparsec.Char (string, newline)
+import Text.Megaparsec.Char (string, eol)
 import Control.Monad.Except (MonadError (throwError))
 import Data.Either.Extra (maybeToEither)
 import Data.List ( intercalate )
@@ -93,7 +93,7 @@ mkOptP name p = OptParser $ StateT $ \opts -> do
 
 toParsec :: Parser OptName -> Parser Text -> OptParser a -> Parser a
 toParsec optNameP optArgsConsumer optP = do
-    opts <- flip manyTill (lookAhead newline) $ do
+    opts <- flip manyTill (lookAhead eol) $ do
         nameOffset  <- getOffset 
         name        <- optNameP
         offset      <- getOffset

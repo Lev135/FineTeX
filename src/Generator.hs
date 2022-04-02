@@ -5,7 +5,7 @@ import Utils ( sepBy_, failMsg, (.:), withError, eitherFail )
 import OptParser ( OptParser, (<||>), (<??>), mkOptP, toParsec )
 import Text.Megaparsec.Debug
 import Text.Megaparsec(Parsec, MonadParsec (takeWhileP, label, takeWhile1P, try, notFollowedBy, lookAhead, eof), Pos, sepBy1, sepBy, unPos, (<?>), choice, optional, parse, errorBundlePretty, mkPos, satisfy, manyTill, option)
-import Text.Megaparsec.Char ( char, space1, newline, letterChar, string )
+import Text.Megaparsec.Char ( char, space1, eol, letterChar, string )
 import qualified Text.Megaparsec.Char.Lexer as L
 import Text.Megaparsec.Char.Lexer (indentGuard)
 
@@ -19,8 +19,9 @@ import Data.Bifunctor (Bifunctor(second, first))
 import Data.Char (isLetter, isSpace, isAlphaNum)
 import Control.Monad.Except (MonadError (throwError), MonadIO (liftIO), liftEither)
 import Control.Monad.Catch (MonadCatch, catchIOError)
-import Data.Text.IO (readFile)
+import Data.ByteString (readFile)
 import Control.Monad.Fail (MonadFail (fail))
+import Data.Text.Encoding (decodeUtf8)
 
 -- Primitives
 
@@ -91,7 +92,7 @@ block ind emptyEl f pel = do
             ind' <- indentLevel
             guard (unPos ind' > ind)
                 `failMsg` "Incorrect indentation (should be greater than " <> show ind <> ")"
-        emptyL   = emptyEl <$ sc <* newline <* scn
+        emptyL   = emptyEl <$ sc <* eol <* scn
 
     f <$> choice [
             try checkInd >> pel `sepBy_` try ((join <$> optional (try emptyL)) <* checkInd),
@@ -105,7 +106,7 @@ inArgsEnvironment name emptyEl pargs f pel
             ind <- indentLevel
             atLexeme name <* sc
             return ind
-        args <- sc *> pargs <* sc <* newline
+        args <- sc *> pargs <* sc <* eol
         block (unPos ind) emptyEl (f args) pel
 
 -- Definition block
@@ -164,7 +165,7 @@ pMathCmdsDef = inEnvironment "MathCommands" Nothing id $ do
     name      <- pCommandL
     strLexeme "="
     val       <- pStringLiteralL
-    newline
+    eol
     return Command{ name, val }
 
 pType :: Parser ArgType
@@ -196,7 +197,7 @@ pOpt :: OptParser a -> Parser a
 pOpt = toParsec optNameP optArgsConsumer
     where
         optNameP = try (string "@") >> pIdentifierL
-        optArgsConsumer = takeWhileP Nothing (`notElem` ['@', '\n'])
+        optArgsConsumer = takeWhileP Nothing (`notElem` ['@', '\n', '\r'])
 
 pEnvsDef :: Parser [Environment]
 pEnvsDef = inEnvironment "Environments" Nothing id $ do
@@ -204,7 +205,7 @@ pEnvsDef = inEnvironment "Environments" Nothing id $ do
         args         <- pDefArgs
         strLexeme    "="
         ((begin, end), innerMath) <- pOpt $ (,) <$> pBeginEndOpt <*> mathP
-        newline
+        eol
         return Environment{ name, begin, end, args, innerMath }
     where
         mathP = isJust <$> optional (mkOptP "Math" (return ()))
@@ -213,9 +214,9 @@ pPrefDef :: Parser [Pref]
 pPrefDef = inEnvironment "Prefs" Nothing id $ do
         name      <- pPrefixL
         strLexeme "="
-        ((begin, end), pref, sep, innerMath) <- pOpt 
+        ((begin, end), pref, sep, innerMath) <- pOpt
                     $ (,,,) <$> pBeginEndOpt <*> prefP <*> sepP <*> mathP
-        newline
+        eol
         return Pref{name, begin, end, pref, sep, innerMath}
     where
         prefP = optional (mkOptP "Pref" pStringLiteralL)
@@ -292,8 +293,8 @@ pPrefLineEnvironment defs@Definitions{prefs, envs} = do
 pParagraph :: Definitions -> Parser DocElement
 pParagraph defs = do
     ind <- indentLevel
-    let sep = newline >> indentGuard sc EQ ind >> notFollowedBy (void newline <|> eof <|> void (string "@"))
-    DocParagraph <$> (pParLine `sepBy1` try sep) <* newline
+    let sep = eol >> indentGuard sc EQ ind >> notFollowedBy (void eol <|> eof <|> void (string "@"))
+    DocParagraph <$> (pParLine `sepBy1` try sep) <* eol
 
 pParLine :: Parser [ParEl]
 pParLine = notFollowedBy (string "@") *> some (pText <|> pForm)
@@ -315,7 +316,7 @@ pEnvironment defs@Definitions{envs} = do
     name <- pIdentifierL
     env <- lookup name envs `failMsg` ("Undefined environment " ++ show name)
     args <- mapM pArgV (atype <$> args env)
-    sc <* newline
+    sc <* eol
     DocEnvironment env args <$> pElements (unPos ind) defs
 
 -- File readers and parsers
@@ -329,7 +330,7 @@ pFile impDefs = do
 
 pImportFiles :: Parser [FilePath]
 pImportFiles = L.nonIndented scn $
-    try (atLexeme "Import" *> fmap unpack pStringLiteralL `sepBy` try (newline *> scn *> atLexeme "Import"))
+    try (atLexeme "Import" *> fmap unpack pStringLiteralL `sepBy` try (eol *> scn *> atLexeme "Import"))
         <|> return []
 
 getImports :: FilePath -> Text -> Either String [FilePath]
@@ -337,7 +338,7 @@ getImports = first (("get imports error: " <>) . errorBundlePretty) .: parse pIm
 
 readDoc :: (MonadError String m, MonadIO m, MonadCatch m) => FilePath -> m (Definitions, [DocElement])
 readDoc fileName = do
-    file      <- liftIO (readFile fileName)
+    file      <- decodeUtf8 <$> liftIO (readFile fileName)
         `catchIOError` \e -> throwError ("Unable to open file '" <> fileName <> "': " <> show e)
     impFNames <- liftEither $ getImports fileName file
     defs      <- mconcat <$> mapM ((fst <$>) . withError addPrefix . readDoc) impFNames
