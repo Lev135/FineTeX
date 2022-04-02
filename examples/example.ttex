@@ -9,12 +9,13 @@
 % They should be in front of all the contents of the file
 % Only definitions are imported from import files 
 
-% By now we should add \documentclass and \usepackage commands
-% as a plain text (it will be fixed in the nearest future)
-\documentclass[12pt,a4paper,oneside]{article}
-\usepackage[utf8]{inputenc}
-\usepackage{amsmath}
-\usepackage{amssymb}
+% TeX environment can be used to insert TeX commands verbatim in output code 
+@Tex
+  \documentclass[12pt,a4paper,oneside]{article}
+  \usepackage[utf8]{inputenc}
+  \usepackage{amsmath}
+  \usepackage{amssymb}
+  % This comment will be in output
 
 
 @Document

@@ -12,7 +12,7 @@ import Text.Megaparsec.Char.Lexer (indentGuard)
 import Data.Void(Void)
 import Data.Text (Text, pack, unpack)
 import qualified Data.Text as T
-import Control.Monad (void, when, unless, join, guard, forM)
+import Control.Monad (void, when, unless, join, guard, forM, replicateM)
 import Control.Applicative ( Alternative(empty, (<|>), some, many) )
 import Data.Maybe (maybeToList, isJust, mapMaybe, fromMaybe)
 import Data.Bifunctor (Bifunctor(second, first))
@@ -26,6 +26,9 @@ import Data.Text.Encoding (decodeUtf8)
 -- Primitives
 
 type Parser = Parsec Void Text
+
+lineSpaces :: Parser [Char]
+lineSpaces = many $ char ' ' <|> char '\t'
 
 lineComment' :: Parser ()
 lineComment' = do
@@ -144,7 +147,8 @@ data Environment = Environment {
         name                :: Text,
         begin, end          :: Maybe Text,
         args                :: [Argument],
-        innerMath           :: Bool
+        innerMath           :: Bool,
+        innerVerb           :: Bool
     }
     deriving Show
 data Pref = Pref {
@@ -220,11 +224,12 @@ pEnvsDef = inEnvironment "Environments" Nothing id $ do
         name         <- pIdentifierL
         args         <- pDefArgs
         strLexeme    "="
-        ((begin, end), innerMath) <- pOpt $ (,) <$> pBeginEndOpt <*> mathP
+        ((begin, end), innerMath, innerVerb) <- pOpt $ (,,) <$> pBeginEndOpt <*> mathP <*> verbP
         eol'
-        return Environment{ name, begin, end, args, innerMath }
+        return Environment{ name, begin, end, args, innerMath, innerVerb}
     where
         mathP = isJust <$> optional (mkOptP "Math" (return ()))
+        verbP = isJust <$> optional (mkOptP "Verb" (return ()))
 
 pPrefDef :: Parser [Pref]
 pPrefDef = inEnvironment "Prefs" Nothing id $ do
@@ -275,6 +280,7 @@ data DocElement
     | DocEnvironment   Environment [ArgV] [DocElement]
     | DocPrefGroup     Pref [[DocElement]]
     | DocEmptyLine
+    | DocVerb          [Text]
     deriving Show
 
 data ParEl
@@ -325,6 +331,17 @@ pParLine = notFollowedBy (string "@") *> some ((pText <|> pForm) <* sc')
 pArgV :: ArgType -> Parser ArgV
 pArgV ArgString = ArgVString <$> pStringLiteralL
 
+pVerb :: Int -> Parser DocElement
+pVerb ind = DocVerb <$> do
+        indentGuard (void lineSpaces) GT $ mkPos ind
+        ind' <- indentLevel
+        pLine `sepBy` try (checkIndent ind')
+    where
+        pLine = T.pack <$> manyTill (satisfy $ const True) eol
+        checkIndent ind' = do
+            lookAhead $ indentGuard (void lineSpaces) GT $ mkPos ind
+            replicateM (unPos ind' - 1) (char ' ' <|> char '\t')
+
 pEnvironment :: Definitions -> Parser DocElement
 pEnvironment defs@Definitions{envs} = do
     ind <- indentLevel
@@ -333,7 +350,9 @@ pEnvironment defs@Definitions{envs} = do
     env <- lookup name envs `failMsg` ("Undefined environment " ++ show name)
     args <- mapM pArgV (atype <$> args env)
     sc <* eol'
-    DocEnvironment env args <$> pElements (unPos ind) defs
+    DocEnvironment env args <$> if innerVerb env
+    then (:[]) <$> pVerb (unPos ind)
+    else pElements (unPos ind) defs
 
 -- File readers and parsers
 

@@ -4,6 +4,7 @@
     Equation       = @TexBeginEnd "equation" @Math
     Section    (name : String) = @Begin "\\section{$name}"
     Subsection (name : String) = @Begin "\\subsection{$name}"
+    Tex            = @Verb
 
   @Prefs
     >              = @TexBeginEnd "align*"    @Math  @Sep "\\\\"

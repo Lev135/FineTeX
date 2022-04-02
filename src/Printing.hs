@@ -11,7 +11,7 @@ import Data.Bifunctor ( Bifunctor(second) )
 import Prettyprinter (pretty)
 import qualified Prettyprinter as P
 import Data.Void (Void)
-
+import Data.List (intersperse)
 type Doc = P.Doc Void
 
 texDoc :: Definitions -> [DocElement] -> Doc 
@@ -49,6 +49,7 @@ texDocElement defs math (DocPrefGroup Pref{begin, end, pref, sep, innerMath} els
         body  = P.vcat $ P.punctuate (pretty sep')
                     ((pretty pref' <>) . texDocImpl defs (math || innerMath) <$> els)
 texDocElement _ _ DocEmptyLine = ""
+texDocElement _ _ (DocVerb txts) = P.vsep $ pretty <$> txts
 
 texParEl :: Definitions -> Bool -> ParEl -> Doc
 texParEl _    False (ParText    t) = P.fillSep $ pretty <$> t
