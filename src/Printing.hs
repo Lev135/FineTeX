@@ -8,8 +8,11 @@ import qualified Data.Text as T
 import Data.Maybe (fromMaybe)
 import Data.Bifunctor ( Bifunctor(second) )
 
-import Text.PrettyPrint hiding ((<>))
+import Text.PrettyPrint ( ($+$), Doc )
 import qualified Text.PrettyPrint as P
+
+text :: Text -> Doc
+text = P.text . T.unpack
 
 texDoc :: Definitions -> [DocElement] -> Doc
 texDoc defs = (<> "\n") . texDocImpl defs False
@@ -26,10 +29,10 @@ replaceArgs args argvs = foldr (.) id (zipWith h args argvs)
 surround :: Maybe Text -> Maybe Text -> Bool -> Doc -> Doc
 surround begin end empty txt = h begin $+$ hNest txt $+$ h end
     where
-        h = maybe mempty (text . T.unpack)
+        h = maybe mempty text
         hNest = case (begin, end) of
             (Nothing, Nothing) -> id
-            _                  -> nest 2
+            _                  -> P.nest 2
 
 texDocElement :: Definitions -> Bool -> DocElement -> Doc
 texDocElement defs math (DocParagraph els)
@@ -44,18 +47,17 @@ texDocElement defs math (DocPrefGroup Pref{begin, end, pref, sep, innerMath} els
     where
         sep'  = fromMaybe T.empty sep
         pref' = maybe T.empty (<> " ") pref
-        body  = vcat $ punctuate (text $ T.unpack sep')
-                    ((text (T.unpack pref') <>) . texDocImpl defs (math || innerMath) <$> els)
+        body  = P.vcat $ P.punctuate (text sep')
+                    ((text pref' <>) . texDocImpl defs (math || innerMath) <$> els)
 texDocElement _ _ DocEmptyLine = ""
 
 texParEl :: Definitions -> Bool -> ParEl -> Doc
-texParEl _    False (ParText    t) = text (T.unpack t)
-texParEl defs False (ParFormula t) = text (T.unpack $ "$" <> t' <> "$")
-    where t' = texMath defs t
-texParEl defs True  (ParText    t) = text (T.unpack $ texMath defs t)
-texParEl defs True  (ParFormula t) = text (T.unpack $ texMath defs t)
+texParEl _    False (ParText    t) = text t
+texParEl defs False (ParFormula t) = "$" <> texMath defs t <> "$"
+texParEl defs True  (ParText    t) = texMath defs t
+texParEl defs True  (ParFormula t) = texMath defs t
 
-texMath :: Definitions -> Text -> Text
-texMath Definitions{mathCmds} = foldr (.) id fs
+texMath :: Definitions -> Text -> Doc
+texMath Definitions{mathCmds} = text . foldr (.) id fs
     where fs = map (uncurry T.replace . second ((<>" ") . val)) mathCmds
 
