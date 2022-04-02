@@ -4,12 +4,12 @@
     Equation       = @TexBeginEnd "equation" @Math
     Section    (name : String) = @Begin "\\section{$name}"
     Subsection (name : String) = @Begin "\\subsection{$name}"
+    Tex            = @Verb
 
   @Prefs
     >              = @TexBeginEnd "align*"    @Math  @Sep "\\\\"
     -              = @TexBeginEnd "itemize"   @Pref "\\item"
     #              = @TexBeginEnd "enumerate" @Pref "\\item"
-    %              = @Pref "%"
   @MathCommands
     <=           = "\\leq"
     >=           = "\\geq"

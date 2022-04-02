@@ -29,19 +29,20 @@
     /\           =  "\\wedge"
     ~            =  "\\neg"
 
-\documentclass[12pt,a4paper,oneside]{article}
-\usepackage[left=2cm, right=2cm, top=1.3cm, bottom=2cm]{geometry}
-\usepackage[utf8]{inputenc}
-\usepackage[russian]{babel}
-\usepackage{amsthm}
-\usepackage{amsmath}
-\usepackage{amssymb}
+@Tex
+  \documentclass[12pt,a4paper,oneside]{article}
+  \usepackage[left=2cm, right=2cm, top=1.3cm, bottom=2cm]{geometry}
+  \usepackage[utf8]{inputenc}
+  \usepackage[russian]{babel}
+  \usepackage{amsthm}
+  \usepackage{amsmath}
+  \usepackage{amssymb}
 
-\newtheorem{definition}{Определение}
-\newtheorem{theorem}{Теорема}
-\newtheorem{proposition}{Предложение}
-\newtheorem{lemma}{Лемма}
-\newtheorem*{corollary}{Следствие}
+  \newtheorem{definition}{Определение}
+  \newtheorem{theorem}{Теорема}
+  \newtheorem{proposition}{Предложение}
+  \newtheorem{lemma}{Лемма}
+  \newtheorem*{corollary}{Следствие}
 
 @Document
   Обозначения модальностей:

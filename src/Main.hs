@@ -1,10 +1,16 @@
 module Main where
 
+import Prelude hiding (writeFile)
 import Generator
+import Printing
 import Data.Text(Text, pack, unpack)
 import Text.Megaparsec (parse, errorBundlePretty, MonadParsec (eof), mkPos, Pos)
 import System.Environment (getArgs)
 import Control.Monad.Except (ExceptT(ExceptT), runExceptT)
+import Prettyprinter.Render.Text (renderStrict)
+import Data.ByteString (writeFile)
+import Prettyprinter (defaultLayoutOptions, layoutSmart, layoutPretty, LayoutOptions(..), PageWidth (AvailablePerLine))
+import Data.Text.Encoding (encodeUtf8)
 
 parsePart :: Parser a -> Text -> Either String a
 parsePart p s = case parse p "" s of
@@ -14,19 +20,15 @@ parsePart p s = case parse p "" s of
 parseAll :: Parser a -> Text -> Either String a
 parseAll p = parsePart (p <* eof)
 
-parseFile :: FilePath -> IO ()
-parseFile filePath = do
-    inp <- pack <$> readFile filePath
-    case parseAll (pFile mempty) inp of
-      Left  e         -> putStrLn e
-      Right (defs, r) -> putStrLn (unpack $ texDoc defs r)
+options = defaultLayoutOptions{layoutPageWidth = AvailablePerLine 100 1.0}
 
 processFile :: FilePath -> FilePath -> IO ()
 processFile inpFile outpFile = do
     res <- runExceptT (readDoc inpFile :: ExceptT String IO (Definitions, [DocElement]))
     case res of
       Left   e             -> putStrLn e
-      Right (defs, docEls) -> writeFile outpFile (unpack $ texDoc defs docEls)
+      Right (defs, docEls) -> do
+          writeFile outpFile (encodeUtf8 . renderStrict . layoutSmart options $ texDoc defs docEls)
 
 processFile' :: FilePath -> IO ()
 processFile' f = processFile (f <> ".ttex") (f <> ".tex")
