@@ -53,7 +53,7 @@ texDocElement _ _ (DocVerb txts) = P.vsep $ pretty <$> txts
 
 texParEl :: Definitions -> Bool -> ParEl -> Doc
 texParEl _    False (ParText    t) = P.fillSep $ pretty <$> t
-texParEl defs False (ParFormula t) = "$" <> P.fillSep (texMath defs <$> t) <> "$"
+texParEl defs False (ParFormula t) = P.group $ "$" <> P.fillSep (texMath defs <$> t) <> "$"
 texParEl defs True  (ParText    t) = P.fillSep $ texMath defs <$> t
 texParEl defs True  (ParFormula t) = P.fillSep  $ texMath defs <$> t
 

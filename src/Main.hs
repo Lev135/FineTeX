@@ -28,7 +28,6 @@ processFile inpFile outpFile = do
     case res of
       Left   e             -> putStrLn e
       Right (defs, docEls) -> do
-          print $ head docEls 
           writeFile outpFile (encodeUtf8 . renderStrict . layoutSmart options $ texDoc defs docEls)
 
 processFile' :: FilePath -> IO ()

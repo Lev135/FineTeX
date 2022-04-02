@@ -32,7 +32,7 @@ lineSpaces = many $ char ' ' <|> char '\t'
 
 lineComment' :: Parser ()
 lineComment' = do
-    char '%' 
+    char '%'
     manyTill (satisfy (const True)) (lookAhead eol)
     void . optional . try $ do
         eol *> many (char ' ' <|> char '\t')
@@ -335,9 +335,10 @@ pVerb :: Int -> Parser DocElement
 pVerb ind = DocVerb <$> do
         indentGuard (void lineSpaces) GT $ mkPos ind
         ind' <- indentLevel
-        pLine `sepBy` try (checkIndent ind')
+        concat <$> pLine `sepBy` try (checkIndent ind')
     where
-        pLine = T.pack <$> manyTill (satisfy $ const True) eol
+        pLine = (:) . T.pack <$> manyTill (satisfy $ const True) eol
+            <*> many (try $ T.empty <$ lineSpaces <* eol)
         checkIndent ind' = do
             lookAhead $ indentGuard (void lineSpaces) GT $ mkPos ind
             replicateM (unPos ind' - 1) (char ' ' <|> char '\t')
