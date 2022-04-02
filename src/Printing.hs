@@ -52,10 +52,10 @@ texDocElement defs math (DocPrefGroup Pref{begin, end, pref, sep, innerMath} els
 texDocElement _ _ DocEmptyLine = ""
 
 texParEl :: Definitions -> Bool -> ParEl -> Doc
-texParEl _    False (ParText    t) = text t
-texParEl defs False (ParFormula t) = "$" <> texMath defs t <> "$"
-texParEl defs True  (ParText    t) = texMath defs t
-texParEl defs True  (ParFormula t) = texMath defs t
+texParEl _    False (ParText    t) = P.fsep $ text <$> t
+texParEl defs False (ParFormula t) = "$" <> P.fsep (texMath defs <$> t) <> "$"
+texParEl defs True  (ParText    t) = P.fsep $ texMath defs <$> t
+texParEl defs True  (ParFormula t) = P.fsep  $ texMath defs <$> t
 
 texMath :: Definitions -> Text -> Doc
 texMath Definitions{mathCmds} = text . foldr (.) id fs

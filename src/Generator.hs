@@ -261,8 +261,8 @@ data DocElement
     deriving Show
 
 data ParEl
-    = ParText Text
-    | ParFormula Text
+    = ParText       [Text] -- List of words
+    | ParFormula    [Text]
     deriving Show
 
 pDocument :: Definitions -> Parser [DocElement]
@@ -298,10 +298,10 @@ pParagraph defs = do
 pParLine :: Parser [ParEl]
 pParLine = notFollowedBy (string "@") *> some (pText <|> pForm)
     where
-        pText = ParText <$> takeWhile1P Nothing smbl
+        pText = ParText <$> (T.words <$> takeWhile1P Nothing smbl)
               <?> "Paragraph text"
         pForm = ParFormula
-              <$> (char '`' *> takeWhile1P Nothing smbl <* char '`')
+              <$> (char '`' *> (T.words <$> takeWhile1P Nothing smbl) <* char '`')
               <?> "Inline formula"
         smbl = (`notElem` ['`', '\n'])
 

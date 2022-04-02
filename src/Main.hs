@@ -28,7 +28,7 @@ processFile inpFile outpFile = do
     res <- runExceptT (readDoc inpFile :: ExceptT String IO (Definitions, [DocElement]))
     case res of
       Left   e             -> putStrLn e
-      Right (defs, docEls) -> writeFile outpFile (renderStyle (style{lineLength = 200}) $ texDoc defs docEls)
+      Right (defs, docEls) -> writeFile outpFile (renderStyle (style{lineLength = 150}) $ texDoc defs docEls)
 
 processFile' :: FilePath -> IO ()
 processFile' f = processFile (f <> ".ttex") (f <> ".tex")
