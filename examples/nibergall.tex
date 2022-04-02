@@ -33,28 +33,28 @@
     \begin{itemize}
       \item $J \vdash  \Diamond_* p \rightarrow  \Diamond_* (p \wedge  \neg \Diamond_* p)$ \\
             Применяя аксиому Лёба для $\Diamond_0 $ :
-      \begin{align*}
-        J \vdash  \Diamond_0 (\Diamond_1 T \wedge  p) \rightarrow  \Diamond_0 (\Diamond_1 T \wedge 
-        p \wedge  \neg \Diamond_0 (\Diamond_1 T \wedge  p))
-      \end{align*}
-      с точностью до обозначения $\Diamond_* \cdot = \Diamond_0 (\Diamond_1 T \wedge  \cdot)$ это и
-      есть требуемое
+            \begin{align*}
+              J \vdash  \Diamond_0 (\Diamond_1 T \wedge  p) \rightarrow  \Diamond_0 (\Diamond_1 T
+              \wedge  p \wedge  \neg \Diamond_0 (\Diamond_1 T \wedge  p))
+            \end{align*}
+            с точностью до обозначения $\Diamond_* \cdot = \Diamond_0 (\Diamond_1 T \wedge  \cdot)$
+            это и есть требуемое
       \item $J \vdash  \Diamond_* ^2 p \rightarrow  \Diamond_* ^2(p \wedge  \neg \Diamond_* ^2 p)$
             \\ Из предыдущего пункта, пользуясь нормальностью $\Diamond_* $ :
-      \begin{align*}
-        J \vdash  \Diamond_* ^2 p \rightarrow  \Diamond_* ^2(p \wedge  \neg \Diamond_* p)
-      \end{align*}
-      Осталось воспользоваться тем, что $GL(\Diamond_* ) \vdash  \Diamond_* ^2 p \rightarrow 
-      \Diamond_* p$ 
+            \begin{align*}
+              J \vdash  \Diamond_* ^2 p \rightarrow  \Diamond_* ^2(p \wedge  \neg \Diamond_* p)
+            \end{align*}
+            Осталось воспользоваться тем, что $GL(\Diamond_* ) \vdash  \Diamond_* ^2 p \rightarrow 
+            \Diamond_* p$ 
       \item $J \vdash  \Diamond_0 \Diamond_1 p \rightarrow  \Diamond_0 \Diamond_1 (p \wedge 
             \neg \Diamond_0 \Diamond_1 p)$ \\ По аксиоме Лёба
-      \begin{align*}
-        J \vdash  \Diamond_0 \Diamond_1 p &\rightarrow  \Diamond_0 (\Diamond_1 p \wedge 
-        \neg \Diamond_0 \Diamond_1 p)\\
-        \Diamond_1 p &\rightarrow  \Diamond_1 (p \wedge  \neg \Diamond_1 p)
-      \end{align*}
-      Пользуясь тем, что $J \vdash  \neg \Diamond_0 \Diamond_1 p \rightarrow 
-      \Box_1 (\neg \Diamond_0 \Diamond_1 p)$ по нормальности получаем требуемое
+            \begin{align*}
+              J \vdash  \Diamond_0 \Diamond_1 p &\rightarrow  \Diamond_0 (\Diamond_1 p \wedge 
+              \neg \Diamond_0 \Diamond_1 p)\\
+              \Diamond_1 p &\rightarrow  \Diamond_1 (p \wedge  \neg \Diamond_1 p)
+            \end{align*}
+            Пользуясь тем, что $J \vdash  \neg \Diamond_0 \Diamond_1 p \rightarrow 
+            \Box_1 (\neg \Diamond_0 \Diamond_1 p)$ по нормальности получаем требуемое
       \item $J \vdash  \Diamond_1 T \wedge  \Diamond_* p \rightarrow  \Diamond_1 T \wedge 
             \Diamond_* (p \wedge  (\neg \Diamond_1 T \vee  \neg \Diamond_* p))$ \\ Следует из
             аксиомы Лёба для $\Diamond_* $ 
@@ -182,25 +182,25 @@
     пунктов
     \begin{itemize}
       \item Используя предыдущее предложение и нормальность
-      \begin{align*}
-        J \vdash  \Diamond ^2 p \rightarrow  \Diamond ^2(p \wedge  \neg \Diamond p \wedge 
-        \neg \Diamond ^2 p) \vee  \Diamond ^2(p \wedge  \Diamond p \wedge  \neg \Diamond ^2 p)
-      \end{align*}
-      Так как $J \vdash  \Diamond ^3 p \rightarrow  \Diamond ^2 p$ и $K(\Diamond ) \vdash 
-      \Diamond p \wedge  \neg \Diamond ^2 p \wedge  \neg \Diamond ^3 p \rightarrow  \Diamond (p
-      \wedge  \neg \Diamond p \wedge  \neg \Diamond ^2 p)$ 
-      \begin{align*}
-        J \vdash  \Diamond ^2(p \wedge  \Diamond p \wedge  \neg \Diamond ^2 p) \rightarrow 
-        \Diamond ^2\Diamond (p \wedge  \neg \Diamond p \wedge  \neg \Diamond ^2 p), \rightarrow 
-        \Diamond ^2(p \wedge  \neg \Diamond p \wedge  \neg \Diamond ^2 p)
-      \end{align*}
+            \begin{align*}
+              J \vdash  \Diamond ^2 p \rightarrow  \Diamond ^2(p \wedge  \neg \Diamond p \wedge 
+              \neg \Diamond ^2 p) \vee  \Diamond ^2(p \wedge  \Diamond p \wedge  \neg \Diamond ^2 p)
+            \end{align*}
+            Так как $J \vdash  \Diamond ^3 p \rightarrow  \Diamond ^2 p$ и $K(\Diamond ) \vdash 
+            \Diamond p \wedge  \neg \Diamond ^2 p \wedge  \neg \Diamond ^3 p \rightarrow 
+            \Diamond (p \wedge  \neg \Diamond p \wedge  \neg \Diamond ^2 p)$ 
+            \begin{align*}
+              J \vdash  \Diamond ^2(p \wedge  \Diamond p \wedge  \neg \Diamond ^2 p) \rightarrow 
+              \Diamond ^2\Diamond (p \wedge  \neg \Diamond p \wedge  \neg \Diamond ^2 p),
+              \rightarrow  \Diamond ^2(p \wedge  \neg \Diamond p \wedge  \neg \Diamond ^2 p)
+            \end{align*}
       \item Заметим, что
-      \begin{align*}
-        K(\Diamond ) \vdash  \Diamond p \rightarrow  \Diamond (p \wedge  \neg \Diamond p \wedge 
-        \neg \Diamond ^2 p) \vee  \Diamond ^2 p \vee  \Diamond ^3 p
-      \end{align*}
-      Откуда пользуясь тем, что $J \vdash  \Diamond ^3 p \rightarrow  \Diamond ^2 p$ получаем
-      требуемое
+            \begin{align*}
+              K(\Diamond ) \vdash  \Diamond p \rightarrow  \Diamond (p \wedge  \neg \Diamond p
+              \wedge  \neg \Diamond ^2 p) \vee  \Diamond ^2 p \vee  \Diamond ^3 p
+            \end{align*}
+            Откуда пользуясь тем, что $J \vdash  \Diamond ^3 p \rightarrow  \Diamond ^2 p$ получаем
+            требуемое
     \end{itemize}
   \end{proof}
 \end{document}

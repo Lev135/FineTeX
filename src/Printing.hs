@@ -35,7 +35,7 @@ surround begin end txt = P.vsep $ catMaybes [pretty <$> begin, Just $ hNest txt,
 
 texDocElement :: Definitions -> Bool -> DocElement -> Doc
 texDocElement defs math (DocParagraph els)
-        = P.align $ P.fillSep $ map (P.fillSep . map (texParEl defs math)) els
+        = P.fillSep $ map (P.fillSep . map (texParEl defs math)) els
 texDocElement defs math (DocEnvironment Environment{begin, end, args, innerMath} argvs els)
         = surround (repl <$> begin) (repl <$> end)
             $ texDocImpl defs (math || innerMath) els
@@ -47,7 +47,7 @@ texDocElement defs math (DocPrefGroup Pref{begin, end, pref, sep, innerMath} els
         sep'  = fromMaybe T.empty sep
         pref' = maybe T.empty (<> " ") pref
         body  = P.vcat $ P.punctuate (pretty sep')
-                    ((pretty pref' <>) . texDocImpl defs (math || innerMath) <$> els)
+                    ((pretty pref' <>) . P.align . texDocImpl defs (math || innerMath) <$> els)
 texDocElement _ _ DocEmptyLine = ""
 texDocElement _ _ (DocVerb txts) = P.vsep $ pretty <$> txts
 
