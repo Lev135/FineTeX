@@ -6,6 +6,7 @@ import Data.Text(Text, pack, unpack)
 import Text.Megaparsec (parse, errorBundlePretty, MonadParsec (eof), mkPos, Pos)
 import System.Environment (getArgs)
 import Control.Monad.Except (ExceptT(ExceptT), runExceptT)
+import Text.PrettyPrint (render)
 
 parsePart :: Parser a -> Text -> Either String a
 parsePart p s = case parse p "" s of
@@ -20,14 +21,14 @@ parseFile filePath = do
     inp <- pack <$> readFile filePath
     case parseAll (pFile mempty) inp of
       Left  e         -> putStrLn e
-      Right (defs, r) -> putStrLn (unpack $ texDoc defs r)
+      Right (defs, r) -> putStrLn (render $ texDoc defs r)
 
 processFile :: FilePath -> FilePath -> IO ()
 processFile inpFile outpFile = do
     res <- runExceptT (readDoc inpFile :: ExceptT String IO (Definitions, [DocElement]))
     case res of
       Left   e             -> putStrLn e
-      Right (defs, docEls) -> writeFile outpFile (unpack $ texDoc defs docEls)
+      Right (defs, docEls) -> writeFile outpFile (render $ texDoc defs docEls)
 
 processFile' :: FilePath -> IO ()
 processFile' f = processFile (f <> ".ttex") (f <> ".tex")

@@ -15,76 +15,77 @@
 \usepackage{amssymb}
 
 \begin{document}
-% Everything here (2 spaces-indented) will be in \begin{document} .. \end{document}
-
-\section{Basics}
-Basic elements of these language are Paragraphs, Environments and Prefs
-
-\subsection{Paragraphs}
-Paragraphs here, as well as in TeX are separated by empty lines:   
-
-This is a simple paragraph
-Which continues at the next line
-
-And this is the next paragraph
-
-\subsection{Environments}
-
-\subsection{Prefs}
-
-\section{Lists}
-\texttt{@Prefs} style is very useful for items.
-Note that prefs should be indented more then surrounding paragraphs
-\begin{itemize}
-\item enumerate (this text is in paragraph inside an item
-so it can be continued on the next line):
-\begin{enumerate}
-\item one (it should be more indented then paragraph)
-\item two
-\item three
-\end{enumerate}
-\item itemize:
-\begin{itemize}
-\item one
-\item two
-\item three
-\end{itemize}
-\end{itemize}
-
-Consecutive elements of the list are framed by the itemize/enumerate environment,
-iff there are no empty lines between them. So:
-\begin{enumerate}
-\item one
-\item two
-\item three
-\end{enumerate}
-
-\begin{enumerate}
-\item one again
-\item two
-\end{enumerate}
-
-\section{Math}
-Inline math can be inserted in paragraph in back quotes: $a + b = c$ 
---- this is inline math
-
-For block math \texttt{@Prefs} syntax is used: 
-\begin{align*}
-a + b = c 
-\end{align*}
-Next lines will be framed by align* environment and \verb.\\. 
-% \verb is used here to escape LaTeX compilation errors 
-will be added between them automatically
-\begin{align*}
-a + b     &= c\\
-(a + b)^2 &= d
-\end{align*}
-
-\begin{align*}
-a + b + c &= 0
-\end{align*}
-Note that the last equation will framed by separate align*, because
-there is an empty line before it. 
-
-To be continued... 
+  % Everything here (2 spaces-indented) will be in \begin{document} .. \end{document}
+  
+  \section{Basics}
+    Basic elements of these language are Paragraphs, Environments and Prefs
+    
+    \subsection{Paragraphs}
+      Paragraphs here, as well as in TeX are separated by empty lines:   
+      
+      This is a simple paragraph Which continues at the next line
+      
+      And this is the next paragraph
+    
+    \subsection{Environments}
+    
+    \subsection{Prefs}
+  
+  \section{Lists}
+    \texttt{@Prefs} style is very useful for items.
+    Note that prefs should be indented more then surrounding paragraphs
+    \begin{itemize}
+      \item enumerate (this text is in paragraph inside an item
+            so it can be continued on the next line):
+            \begin{enumerate}
+              \item one (it should be more indented then paragraph)
+              \item two
+              \item three
+            \end{enumerate}
+      \item itemize:
+            \begin{itemize}
+              \item one
+              \item two
+              \item three
+            \end{itemize}
+    \end{itemize}
+    
+    Consecutive elements of the list are framed by the itemize/enumerate environment,
+    iff there are no empty lines between them. So:
+    \begin{enumerate}
+      \item one
+      \item two
+      \item three
+    \end{enumerate}
+    
+    \begin{enumerate}
+      \item one again
+      \item two
+    \end{enumerate}
+  
+  \section{Math}
+    Inline math can be inserted in paragraph in back quotes: 
+    $a + b = c$
+     
+    --- this is inline math
+    
+    For block math \texttt{@Prefs} syntax is used: 
+    \begin{align*}
+      a + b = c 
+    \end{align*}
+    Next lines will be framed by align* environment and \verb.\\. 
+    % \verb is used here to escape LaTeX compilation errors 
+    will be added between them automatically
+    \begin{align*}
+      a + b     &= c\\
+      (a + b)^2 &= d
+    \end{align*}
+    
+    \begin{align*}
+      a + b + c &= 0
+    \end{align*}
+    Note that the last equation will framed by separate align*, because
+    there is an empty line before it. 
+  
+  To be continued... 
 \end{document}
