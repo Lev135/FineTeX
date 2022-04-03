@@ -77,12 +77,8 @@ pIdentifierL = lexeme (takeWhile1P Nothing (\ch -> isLetter ch || ch == '-'))
     <?> "Identifier"
 
 pOperator :: Parser Text
-pOperator = T.cons <$> satisfy (`elem` fstSmbls) <*> takeWhileP Nothing (not . isSpace)
+pOperator = takeWhile1P Nothing (not . isSpace)
     <?> "Operator"
-    where
-        fstSmbls :: [Char]
-        fstSmbls = "!#$%^&*-+,./|\\><[]~"
-
 
 pPrefix :: Parser Text
 pPrefix = T.cons <$> satisfy (`elem` fstSmbls) <*> takeWhileP Nothing (\ch -> not $ isSpace ch || isAlphaNum ch)
