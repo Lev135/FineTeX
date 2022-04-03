@@ -44,7 +44,7 @@
             \begin{align*}
               J \vdash \Diamond_*^2 p \rightarrow \Diamond_*^2(p \wedge \neg\Diamond_* p)
             \end{align*}
-            Осталось воспользоваться тем, что 
+            Осталось воспользоваться тем, что
             $GL(\Diamond_*) \vdash \Diamond_*^2 p \rightarrow \Diamond_* p$
       \item $J \vdash \Diamond_0\Diamond_1 p \rightarrow \Diamond_0\Diamond_1(p \wedge
             \neg\Diamond_0\Diamond_1 p)$\\ По аксиоме Лёба
@@ -53,11 +53,11 @@
               \neg\Diamond_0\Diamond_1 p)\\
               \Diamond_1 p &\rightarrow \Diamond_1(p \wedge \neg\Diamond_1 p)
             \end{align*}
-            Пользуясь тем, что 
+            Пользуясь тем, что
             $J \vdash \neg\Diamond_0\Diamond_1 p \rightarrow \Box_1(\neg\Diamond_0\Diamond_1 p)$ по
             нормальности получаем требуемое
       \item $J \vdash \Diamond_1 T \wedge \Diamond_* p \rightarrow \Diamond_1 T \wedge \Diamond_*(p
-            \wedge (\neg\Diamond_1 T \vee \neg\Diamond_* p))$\\ Следует из аксиомы Лёба для 
+            \wedge (\neg\Diamond_1 T \vee \neg\Diamond_* p))$\\ Следует из аксиомы Лёба для
             $\Diamond_*$
     \end{itemize}
   \end{proof}
@@ -105,7 +105,7 @@
   \end{corollary}
 
   \begin{lemma}
-    Пусть $\Diamond_a$ и $\Diamond_b$ --- модальности логики $T$, 
+    Пусть $\Diamond_a$ и $\Diamond_b$ --- модальности логики $T$,
     $\Diamond_\star A \equiv \Diamond_a A \vee \Diamond_b A$.
     \begin{align*}
       T \vdash GL(\Diamond_a), GL(\Diamond_b), \Diamond_b\Diamond_a p \rightarrow \Diamond_a p,
@@ -149,14 +149,14 @@
       &\leftrightarrow \Diamond_1 T \wedge \Diamond_* p \vee \Diamond_0\Diamond_1 p \vee
       \Diamond_*^2 p
     \end{align*}
-    Теперь дважды воспользуемся леммой. \\ Сначала для $\Diamond_a \equiv \Diamond_0\Diamond_1$ и 
+    Теперь дважды воспользуемся леммой. \\ Сначала для $\Diamond_a \equiv \Diamond_0\Diamond_1$ и
     $\Diamond_b \equiv \Diamond_*^2$.
     \begin{itemize}
       \item $J \vdash \Diamond_*^2\Diamond_0\Diamond_1 p \rightarrow \Diamond_0^3\Diamond_1 p,
             \rightarrow \Diamond_0\Diamond_1 p$
       \item $J \vdash \Diamond_0\Diamond_1\Diamond_*^2 p \rightarrow \Diamond_* p$
     \end{itemize}
-    Осталось применить ту же лемму для $\Diamond_a \equiv \Diamond_1 T \wedge \Diamond_*\cdot$ и 
+    Осталось применить ту же лемму для $\Diamond_a \equiv \Diamond_1 T \wedge \Diamond_*\cdot$ и
     $\Diamond_b \equiv \Diamond_0\Diamond_1\cdot \vee \Diamond_*^2\cdot$.
     \begin{itemize}
       \item $J \vdash \Diamond_1 T \wedge \Diamond_*(\Diamond_0\Diamond_1 p \vee \Diamond_*^2 p)

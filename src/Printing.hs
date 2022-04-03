@@ -36,7 +36,7 @@ surround begin end txt = P.vsep $ catMaybes [pretty <$> begin, Just $ hNest txt,
 
 texDocElement :: Definitions -> Bool -> DocElement -> Doc
 texDocElement defs math (DocParagraph els)
-        = P.fillSep $ map (P.fillCat . map (texParEl defs math)) els
+        = P.fillSep $ map (P.hcat . map (texParEl defs math)) els
 texDocElement defs math (DocEnvironment Environment{begin, end, args, innerMath} argvs els)
         = surround (repl <$> begin) (repl <$> end)
             $ texDocImpl defs (math || innerMath) els
