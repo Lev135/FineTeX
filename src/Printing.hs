@@ -12,9 +12,10 @@ import Prettyprinter (pretty)
 import qualified Prettyprinter as P
 import Data.Void (Void)
 import Data.List (intersperse)
+import Data.Char (isAlphaNum)
 type Doc = P.Doc Void
 
-texDoc :: Definitions -> [DocElement] -> Doc 
+texDoc :: Definitions -> [DocElement] -> Doc
 texDoc defs = (<> "\n") . texDocImpl defs False
 
 texDocImpl :: Definitions -> Bool -> [DocElement] -> Doc
@@ -35,7 +36,7 @@ surround begin end txt = P.vsep $ catMaybes [pretty <$> begin, Just $ hNest txt,
 
 texDocElement :: Definitions -> Bool -> DocElement -> Doc
 texDocElement defs math (DocParagraph els)
-        = P.fillSep $ map (P.fillSep . map (texParEl defs math)) els
+        = P.fillSep $ map (P.fillCat . map (texParEl defs math)) els
 texDocElement defs math (DocEnvironment Environment{begin, end, args, innerMath} argvs els)
         = surround (repl <$> begin) (repl <$> end)
             $ texDocImpl defs (math || innerMath) els
@@ -58,6 +59,12 @@ texParEl defs True  (ParText    t) = P.fillSep $ texMath defs <$> t
 texParEl defs True  (ParFormula t) = P.fillSep  $ texMath defs <$> t
 
 texMath :: Definitions -> Text -> Doc
-texMath Definitions{mathCmds} = pretty . foldr (.) id fs
-    where fs = map (uncurry T.replace . second ((<>" ") . val)) mathCmds
+texMath Definitions{mathCmds} = pretty . rmSpaces . foldr (.) id fs
+    where
+        fs       = map (uncurry T.replace . second ((<>" ") . val)) mathCmds
+        rmSpaces :: Text -> Text
+        rmSpaces = T.foldr h ""
+            where
+                h ' ' xs | T.null xs || not (isAlphaNum $ T.head xs) = xs
+                h x xs = T.cons x xs
 

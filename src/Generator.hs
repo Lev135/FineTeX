@@ -318,10 +318,16 @@ pParagraph defs = do
     let sep = eol' >> indentGuard sc EQ ind >> notFollowedBy (void eol' <|> eof <|> void (string "@"))
     DocParagraph <$> (pParLine `sepBy1` try sep) <* eol'
 
-pParLine :: Parser [ParEl]
-pParLine = notFollowedBy (string "@") *> some ((pText <|> pForm) <* sc')
+words' :: Text -> [Text]
+words' t = h (T.head t) <> T.words t <> h (T.last t)
     where
-        pText = ParText <$> (T.words <$> takeWhile1P Nothing smbl)
+        h ' ' = [T.empty]
+        h _   = []
+
+pParLine :: Parser [ParEl]
+pParLine = notFollowedBy (string "@") *> some ((pText <|> pForm) <* optional lineComment')
+    where
+        pText = ParText <$> (words' <$> takeWhile1P Nothing smbl)
               <?> "Paragraph text"
         pForm = ParFormula
               <$> (char '`' *> (T.words <$> takeWhile1P Nothing smbl) <* char '`')
