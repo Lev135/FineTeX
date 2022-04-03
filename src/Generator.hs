@@ -73,7 +73,7 @@ pStringLiteralL = lexeme (choice (pStringBetween <$> ['"', '\'']))
     <?> "String literal"
 
 pIdentifierL :: Parser Text
-pIdentifierL = lexeme (takeWhile1P Nothing (\ch -> isLetter ch || ch == '-'))
+pIdentifierL = lexeme (takeWhile1P Nothing (\ch -> isLetter ch || ch `elem` ['-', '\'']))
     <?> "Identifier"
 
 pOperator :: Parser Text
