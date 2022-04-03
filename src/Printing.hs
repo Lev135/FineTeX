@@ -3,22 +3,42 @@ module Printing (
 )   where
 
 import Generator
+    ( ParEl(..),
+      DocElement(..),
+      Definitions(Definitions, mathCmds),
+      Command(val),
+      Pref(Pref, innerMath, sep, pref, end, begin),
+      Environment(Environment, innerMath, args, end, begin),
+      ArgV(..),
+      Argument(Argument, name) )
 import Data.Text (Text)
 import qualified Data.Text as T
 import Data.Maybe (fromMaybe, catMaybes)
 import Data.Bifunctor ( Bifunctor(second) )
+
+import Data.Map (Map)
+import qualified Data.Map as M
+import Text.Replace ( Trie, replaceWithTrie, mapToTrie, text'fromText )
 
 import Prettyprinter (pretty)
 import qualified Prettyprinter as P
 import Data.Void (Void)
 import Data.List (intersperse)
 import Data.Char (isAlphaNum)
+import Data.Text.Lazy (fromStrict, toStrict)
 type Doc = P.Doc Void
 
-texDoc :: Definitions -> [DocElement] -> Doc
-texDoc defs = (<> "\n") . texDocImpl defs False
+newtype Tries = Tries {
+        mathCmdsTrie :: Trie
+    }
 
-texDocImpl :: Definitions -> Bool -> [DocElement] -> Doc
+texDoc :: Definitions -> [DocElement] -> Doc
+texDoc Definitions{mathCmds} = (<> "\n") . texDocImpl tries False
+    where tries = Tries {
+            mathCmdsTrie = mapToTrie . M.map (( <> " ") . val) . M.mapKeys text'fromText $  mathCmds
+        }
+
+texDocImpl :: Tries -> Bool -> [DocElement] -> Doc
 texDocImpl defs math = P.vcat . map (texDocElement defs math)
 
 
@@ -34,7 +54,7 @@ surround begin end txt = P.vsep $ catMaybes [pretty <$> begin, Just $ hNest txt,
             (Nothing, Nothing) -> id
             _                  -> P.indent 2
 
-texDocElement :: Definitions -> Bool -> DocElement -> Doc
+texDocElement :: Tries -> Bool -> DocElement -> Doc
 texDocElement defs math (DocParagraph els)
         = P.fillSep $ map (P.hcat . map (texParEl defs math)) els
 texDocElement defs math (DocEnvironment Environment{begin, end, args, innerMath} argvs els)
@@ -52,7 +72,7 @@ texDocElement defs math (DocPrefGroup Pref{begin, end, pref, sep, innerMath} els
 texDocElement _ _ DocEmptyLine = ""
 texDocElement _ _ (DocVerb txts) = P.vsep $ pretty <$> txts
         
-texParEl :: Definitions -> Bool -> ParEl -> Doc
+texParEl :: Tries -> Bool -> ParEl -> Doc
 texParEl _    False (ParText    t) = P.fillSep $ pretty <$> t
 texParEl defs False (ParFormula t) = P.pageWidth $ \pgWidth ->
     P.nesting $ \nestLvl -> 
@@ -71,13 +91,11 @@ texParEl defs False (ParFormula t) = P.pageWidth $ \pgWidth ->
 texParEl defs True  (ParText    t) = P.fillSep $ pretty . texMath defs <$> t
 texParEl defs True  (ParFormula t) = P.fillSep $ pretty . texMath defs <$> t
 
-texMath :: Definitions -> Text -> Text
-texMath Definitions{mathCmds} = rmSpaces . foldr (.) id fs
+texMath :: Tries -> Text -> Text
+texMath Tries{mathCmdsTrie} = rmSpaces . toStrict . replaceWithTrie mathCmdsTrie . fromStrict
     where
-        fs       = map (uncurry T.replace . second ((<>" ") . val)) mathCmds
         rmSpaces :: Text -> Text
         rmSpaces = T.foldr h ""
             where
                 h ' ' xs | T.null xs || not (isAlphaNum $ T.head xs) = xs
                 h x xs = T.cons x xs
-

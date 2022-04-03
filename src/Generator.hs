@@ -22,6 +22,8 @@ import Control.Monad.Catch (MonadCatch, catchIOError)
 import Data.ByteString (readFile)
 import Control.Monad.Fail (MonadFail (fail))
 import Data.Text.Encoding (decodeUtf8)
+import qualified Data.Map as M
+import Data.Map (Map)
 
 -- Primitives
 
@@ -247,10 +249,10 @@ pPrefDef = inEnvironment "Prefs" Nothing id $ do
 -- Processing definitions
 
 data Definitions = Definitions {
-        envs         :: [(Text, Environment)],
-        cmds         :: [(Text, Command)],
-        mathCmds     :: [(Text, Command)],
-        prefs        :: [(Text, Pref)]
+        envs         :: Map Text Environment,
+        cmds         :: Map Text Command,
+        mathCmds     :: Map Text Command,
+        prefs        :: Map Text Pref
     }
     deriving Show
 
@@ -258,20 +260,20 @@ instance Semigroup Definitions where
     (Definitions a b c d) <> (Definitions a' b' c' d')
         = Definitions (a <> a') (b <> b') (c <> c') (d <> d')
 instance Monoid Definitions where
-    mempty = Definitions [] [] [] []
+    mempty = Definitions mempty mempty mempty mempty
 
 processDefs :: [Definition] -> Definitions
 processDefs = mconcat . map processDef
 
 processDef :: Definition -> Definitions
 processDef (DefE env@Environment{name, begin, end, innerMath})
-    = mempty { envs     = [(name, env)] }
+    = mempty { envs     = M.singleton name env }
 processDef (DefC cmd@Command{name})
-    = mempty { cmds     = [(name, cmd)] }
+    = mempty { cmds     = M.singleton name cmd }
 processDef (DefMC cmd@Command{name})
-    = mempty { mathCmds = [(name, cmd)] }
+    = mempty { mathCmds = M.singleton name cmd }
 processDef (DefP pr@Pref{name})
-    = mempty {prefs     = [(name, pr)]}
+    = mempty {prefs     = M.singleton name pr }
 
 -- Document body
 
@@ -304,7 +306,7 @@ pPrefLineEnvironment :: Definitions -> Parser DocElement
 pPrefLineEnvironment defs@Definitions{prefs, envs} = do
     ind'  <- indentLevel
     name  <- try $ pPrefix <* string " "
-    pref  <- lookup name prefs `failMsg` "Unexpected prefix: " ++ unpack name
+    pref  <- M.lookup name prefs `failMsg` "Unexpected prefix: " ++ unpack name
     let pPref = indentGuard sc EQ ind' *> string (name <> " ")
         pEl = do
             ind'' <- indentLevel
@@ -354,7 +356,7 @@ pEnvironment defs@Definitions{envs} = do
     ind <- indentLevel
     try $ string "@"
     name <- pIdentifierL
-    env <- lookup name envs `failMsg` ("Undefined environment " ++ show name)
+    env <- M.lookup name envs `failMsg` ("Undefined environment " ++ show name)
     args <- mapM pArgV (atype <$> args env)
     sc <* eol'
     DocEnvironment env args <$> if innerVerb env
