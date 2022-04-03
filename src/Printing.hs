@@ -51,15 +51,28 @@ texDocElement defs math (DocPrefGroup Pref{begin, end, pref, sep, innerMath} els
                     ((pretty pref' <>) . P.align . texDocImpl defs (math || innerMath) <$> els)
 texDocElement _ _ DocEmptyLine = ""
 texDocElement _ _ (DocVerb txts) = P.vsep $ pretty <$> txts
-
+        
 texParEl :: Definitions -> Bool -> ParEl -> Doc
 texParEl _    False (ParText    t) = P.fillSep $ pretty <$> t
-texParEl defs False (ParFormula t) = P.group $ "$" <> P.fillSep (texMath defs <$> t) <> "$"
-texParEl defs True  (ParText    t) = P.fillSep $ texMath defs <$> t
-texParEl defs True  (ParFormula t) = P.fillSep  $ texMath defs <$> t
+texParEl defs False (ParFormula t) = P.pageWidth $ \pgWidth ->
+    P.nesting $ \nestLvl -> 
+        if ribbonWidth pgWidth nestLvl > elsWidth
+            then sepLayout
+            else fillLayout
+    where
+        sepLayout   = P.enclose "$" "$" $ P.hsep    $ pretty <$> els
+        fillLayout  = P.enclose "$" "$" $ P.fillSep $ pretty <$> els
+        elsWidth    = sum (T.length <$> els) + (length els + 1) 
+        ribbonWidth (P.AvailablePerLine lineLength ribbonFraction) nestLvl 
+            = floor $ fromIntegral (lineLength - nestLvl `max` 0) * ribbonFraction
+        ribbonWidth P.Unbounded _ = 100000
+        els = texMath defs <$> t
 
-texMath :: Definitions -> Text -> Doc
-texMath Definitions{mathCmds} = pretty . rmSpaces . foldr (.) id fs
+texParEl defs True  (ParText    t) = P.fillSep $ pretty . texMath defs <$> t
+texParEl defs True  (ParFormula t) = P.fillSep $ pretty . texMath defs <$> t
+
+texMath :: Definitions -> Text -> Text
+texMath Definitions{mathCmds} = rmSpaces . foldr (.) id fs
     where
         fs       = map (uncurry T.replace . second ((<>" ") . val)) mathCmds
         rmSpaces :: Text -> Text
