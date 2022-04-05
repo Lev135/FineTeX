@@ -18,8 +18,7 @@
   % This comment will be in output
 
 
-@Document
-  % Everything here (2 spaces-indented) will be in \begin{document} .. \end{document}
+@Document % Everything below 2 spaces-indented will be in \begin{document} .. \end{document}
   @Section "Basics"
     Basic elements of these language are Paragraphs, Environments and Prefs
 
@@ -64,8 +63,9 @@
 
     For block math \texttt{@Prefs} syntax is used: 
       > a + b = c 
-    Next lines will be framed by align* environment and \verb.\\. 
+    Next lines will be framed by align* environment and \verb.\\.%
     % \verb is used here to escape LaTeX compilation errors 
+    % '%' two lines above is to prevent splitting paragraph on two parts by this comment
     will be added between them automatically
       > a + b     &= c
       > (a + b)^2 &= d
