@@ -8,5 +8,5 @@ There is no getting started guide or language documentation yet.
 It's recommended to read [example.ttex](examples/example.ttex) file.  
 For more complex example see [nibergall.ttex](examples/nibergall.ttex).
 
-Some usefull information can be found in [Wiki](wiki#getting-started)
+Some usefull information can be found in [Wiki](https://github.com/Lev135/latex-generator/wiki#getting-started).
 Feel free to add there anything have about this project.
