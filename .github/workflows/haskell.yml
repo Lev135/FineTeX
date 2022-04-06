@@ -40,4 +40,9 @@ jobs:
       run: cabal build texgen
     - name: Run
       run: |
-        cabal run texgen
+        ls ./examples/
+        for src in ./examples/*.ttex
+        do
+          echo "Testing $src"
+          cabal run texgen -- "$src" -o ./test/$src
+        done
