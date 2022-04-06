@@ -45,8 +45,9 @@ jobs:
         for src in ./examples/*.ttex
         do
           echo "Testing $src"
-          out = "./test/$(basename $src).tex"
+          base="$(basename $src .ttex)"
+          curOut="./test/$base.tex"
           cabal run texgen -- "$src" -o $out
-          baseOut = "./examples/$(basename $src).tex"
-          diff $out $baseOut
+          savedOut="./examples/$base.tex"
+          diff $curOut $savedOut
         done
