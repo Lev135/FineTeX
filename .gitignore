@@ -6,8 +6,8 @@ dist-newstyle/
 
 drafts/
 
-examples/out/*.log
-examples/out/*.aux
-examples/out/*.fdb_latexmk
-examples/out/*.fls
-examples/out/*.gz
+*.log
+*.aux
+*.fdb_latexmk
+*.fls
+*.gz

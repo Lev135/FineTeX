@@ -1,0 +1,12 @@
+@Define
+  @Environments
+    MathEquation        = @TexBeginEnd "equation" @Math
+    WithoutMathEquation = @TexBeginEnd "equation"
+  @MathCommands
+    >=    = "\\geq"
+
+@MathEquation
+  a >= b >= c
+
+@WithoutMathEquation
+  a >= b >= c

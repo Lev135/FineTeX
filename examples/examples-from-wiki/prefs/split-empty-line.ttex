@@ -1,0 +1,12 @@
+@Define
+  @Prefs
+    -  = @TexBeginEnd "itemize" @Pref "\\item"
+
+- one
+- two
+- three
+
+- first
+- second
+- third
+

@@ -1,0 +1,10 @@
+@Define
+  @Environments
+    Section (name : String) = @Begin "\\section{$name}"
+    Frame (start : String) (stop : String) = @Begin "Starting: $start" @End "Finishing: $stop"
+
+@Section "Frame example"
+  @Frame "we have no apples yet" "there are two apples now!!!"
+    First apple found!
+
+    Second apple found!

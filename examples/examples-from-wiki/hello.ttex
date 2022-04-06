@@ -1,0 +1,11 @@
+@Define
+  @Environments
+    Document = @TexBeginEnd "document"
+    Tex      = @Verb
+
+@Tex
+  \documentclass{article}
+  \usepackage[utf8]{inputenc}
+
+@Document
+  Hello, \LaTeX!

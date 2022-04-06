@@ -1,0 +1,9 @@
+@Define
+  @Prefs
+    >  = @TexBeginEnd "align*" @Sep "\\\\" @Math
+
+Some text
+  > a^2 + b^2 = c^2
+Next text
+  > a + b &= c
+  >     d &= e + f

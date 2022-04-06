@@ -1,0 +1,13 @@
+@Define
+  @MathCommands
+    ∀ = "\\forall"
+    ∃ = "\\exists"
+    δ = "\\delta"
+    ϵ = "\\epsilon"
+    -> = "\\rightarrow"
+    => = "\\Rightarrow"
+  @Prefs
+    > = @TexBeginEnd "align" @Sep "\\\\" @Math
+
+The function `f` has a limit `y` when `x -> x_0` iff
+  > ∀ϵ > 0 ∃δ > 0 : ∀x (|x - x_0| < δ => |f(x) - y| < ϵ)

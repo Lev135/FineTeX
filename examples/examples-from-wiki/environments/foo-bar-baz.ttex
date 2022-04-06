@@ -1,0 +1,17 @@
+@Define
+  @Environments
+    Foo     = @TexBeginEnd "foo"
+    Bar     = @Begin       "\\textit{This is a bar:}"
+    Baz     = @End         "\\textit{That was baz...}"
+
+@Foo
+  some text in foo
+  @Bar
+    bar in foo
+    @Baz
+      Baz in bar
+    in bar, but not in baz
+  in foo....
+
+  And this is also in foo
+But now outside all environments.
