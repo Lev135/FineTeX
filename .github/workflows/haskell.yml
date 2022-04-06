@@ -47,7 +47,7 @@ jobs:
           echo "Testing $src"
           base="$(basename $src .ttex)"
           curOut="./test/$base.tex"
-          cabal run texgen -- "$src" -o $out
+          cabal run texgen -- "$src" -o $curOut
           savedOut="./examples/$base.tex"
           diff $curOut $savedOut
         done
