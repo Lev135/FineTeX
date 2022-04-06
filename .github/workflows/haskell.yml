@@ -49,5 +49,5 @@ jobs:
           curOut="./test/$base.tex"
           cabal run texgen -- "$src" -o $curOut
           savedOut="./examples/$base.tex"
-          diff --strip-trailing-cr $curOut $savedOut
+          diff --ignore-trailing-space $curOut $savedOut
         done
