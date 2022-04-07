@@ -58,13 +58,13 @@ jobs:
       run: |
         for src in $(find ./examples/ -name '*.ttex')
         do
-          echo "Testing $src"
+          echo "Printing diff $src"
           base="$(basename $src .ttex)"
           dir="$(dirname $src)"
           
           curOut="./test/$base.tex"
           savedOut="$dir/$base.tex"
           
-          cat $curOut
-          cat $savedOut
+          diff $curOut $savedOut
+          _=$?
         done
