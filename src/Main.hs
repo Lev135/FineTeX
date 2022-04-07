@@ -15,6 +15,7 @@ import qualified Options.Applicative as Opt
 import Data.List.Extra (spanEnd)
 import Control.Applicative (Alternative((<|>)))
 import Options.Applicative (readerError)
+import GHC.IO.Encoding
 
 parsePart :: Parser a -> Text -> Either String a
 parsePart p s = case parse p "" s of
@@ -96,7 +97,7 @@ options = Options
     <*> printOptions
 
 main :: IO ()
-main = processFile . defaultOutp =<< Opt.execParser opts
+main = processFile . defaultOutp =<< Opt.execParser opts <* setLocaleEncoding utf8
     where
         opts = Opt.info (Opt.helper <*> options)
              ( Opt.fullDesc
