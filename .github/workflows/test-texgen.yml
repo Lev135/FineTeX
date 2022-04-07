@@ -65,6 +65,5 @@ jobs:
           curOut="./test/$base.tex"
           savedOut="$dir/$base.tex"
           
-          diff $curOut $savedOut
-          _=$?
+          diff $curOut $savedOut || :
         done
