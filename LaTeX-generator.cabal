@@ -76,6 +76,8 @@ executable texgen
                        containers            >= 0.6.5.1,
                        text-replace          >= 0.1.0.2,
                        optparse-applicative  >= 0.17.0,
+  if os(windows)
+    build-depends:
                        Win32
 
   -- Directories containing source files.
