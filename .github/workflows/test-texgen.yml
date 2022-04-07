@@ -1,4 +1,4 @@
-name: Haskell CI
+name: Test-haskell
 
 on:
   push:
@@ -42,12 +42,29 @@ jobs:
       run: |
         ls ./examples/
         mkdir test
-        for src in ./examples/*.ttex
+        for src in $(find ./examples/ -name '*.ttex')
         do
           echo "Testing $src"
           base="$(basename $src .ttex)"
+          dir="$(dirname $src)"
+          
           curOut="./test/$base.tex"
+          savedOut="$dir/$base.tex"
+          
           cabal run texgen -- "$src" -o $curOut
-          savedOut="./examples/$base.tex"
           diff --ignore-all-space $curOut $savedOut
+        done
+    - name: Printing output
+      run: |
+        for src in $(find ./examples/ -name '*.ttex')
+        do
+          echo "Testing $src"
+          base="$(basename $src .ttex)"
+          dir="$(dirname $src)"
+          
+          curOut="./test/$base.tex"
+          savedOut="$dir/$base.tex"
+          
+          cat $curOut
+          cat $savedOut
         done
