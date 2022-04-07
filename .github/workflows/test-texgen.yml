@@ -54,7 +54,7 @@ jobs:
           cabal run texgen -- "$src" -o $curOut
           diff --ignore-all-space $curOut $savedOut
         done
-    - name: Printing output
+    - name: Printing output diffs
       run: |
         for src in $(find ./examples/ -name '*.ttex')
         do
@@ -65,5 +65,5 @@ jobs:
           curOut="./test/$base.tex"
           savedOut="$dir/$base.tex"
           
-          diff $curOut $savedOut || :
+          sdiff --ignore-trailing-space -l t1 t2 | cat -n | grep -v -e '($'
         done
