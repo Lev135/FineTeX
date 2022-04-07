@@ -58,7 +58,8 @@ executable texgen
   other-modules:      Generator, 
                       Utils,
                       OptParser,
-                      Printing
+                      Printing,
+                      IOUtils
 
   -- LANGUAGE extensions used by modules in this package.
   -- other-extensions:
@@ -74,7 +75,8 @@ executable texgen
                        bytestring            >= 0.11.3.0,
                        containers            >= 0.6.5.1,
                        text-replace          >= 0.1.0.2,
-                       optparse-applicative  >= 0.17.0
+                       optparse-applicative  >= 0.17.0,
+                       Win32
 
   -- Directories containing source files.
   hs-source-dirs:      src

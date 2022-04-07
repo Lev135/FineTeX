@@ -15,7 +15,7 @@ import qualified Options.Applicative as Opt
 import Data.List.Extra (spanEnd)
 import Control.Applicative (Alternative((<|>)))
 import Options.Applicative (readerError)
-import GHC.IO.Encoding
+import qualified IOUtils
 
 parsePart :: Parser a -> Text -> Either String a
 parsePart p s = case parse p "" s of
@@ -29,7 +29,7 @@ processFile :: Options -> IO ()
 processFile Options{ inpFile, outpFile, pageWidth, printOpts } = do
     res <- runExceptT (readDoc inpFile :: ExceptT String IO (Definitions, [DocElement]))
     case res of
-      Left   e             -> putStrLn e
+      Left   e             -> IOUtils.putStrLn e
       Right (defs, docEls) -> do
           writeFile outpFile (encodeUtf8 . renderStrict . layoutSmart renderOpts $ texDoc printOpts defs docEls)
     where
@@ -97,7 +97,7 @@ options = Options
     <*> printOptions
 
 main :: IO ()
-main = processFile . defaultOutp =<< Opt.execParser opts <* setLocaleEncoding utf8
+main = processFile . defaultOutp =<< Opt.execParser opts
     where
         opts = Opt.info (Opt.helper <*> options)
              ( Opt.fullDesc
