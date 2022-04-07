@@ -12,6 +12,7 @@ module IOUtils (
   trace, traceIO
   ) where
 
+import System.IO.Unsafe(unsafePerformIO)
 #ifdef mingw32_HOST_OS
 
 import System.Win32.Types (BOOL, HANDLE, DWORD, LPDWORD, LPWSTR, LPCWSTR, LPVOID)
@@ -22,7 +23,6 @@ import Prelude hiding (getContents, putStr, putStrLn) --(IO, Read, Show, String)
 import qualified System.IO (getContents)
 import System.IO hiding (getContents, putStr, putStrLn)
 import Data.Char (ord)
-import System.IO.Unsafe(unsafePerformIO)
 
  {- <http://msdn.microsoft.com/en-us/library/ms683231(VS.85).aspx>
     HANDLE WINAPI GetStdHandle(DWORD nStdHandle);
