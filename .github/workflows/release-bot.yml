@@ -49,7 +49,7 @@ jobs:
       run: cabal build texgen -O2
     - name: Move binary
       run: |
-        for file in $(find . -name "texgen*"
+        for file in $(find . -name "texgen*")
         do
           echo $file
           dir="$(dirname $file)"
@@ -58,8 +58,11 @@ jobs:
             echo "build found: $file"
             mkdir -p ./bin
             mv $file ./bin
-          fi 
+          fi
         done
+    - name: Make release note
+      run: |
+        echo "$(date +"%Y-%m-%d %T"): on branch $GITHUB_HEAD_REF" >> bin/release-notes.txt
     - name: Commiting changes
       run: |
         git add -A
