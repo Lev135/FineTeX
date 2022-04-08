@@ -13,10 +13,9 @@ on:
 
 # A workflow run is made up of one or more jobs that can run sequentially or in parallel
 jobs:
-  build:
+  release-ununtu:
 
     runs-on: ubuntu-latest
-
     steps:
     - uses: actions/checkout@v3
     - uses: actions/setup-haskell@v1
@@ -26,7 +25,6 @@ jobs:
     - name: Setting up git
       run: |
         git config --global user.name 'Release bot'
-        git config --global user.email 'lev_135@mail.ru'
         git fetch
         git checkout $GITHUB_HEAD_REF
 
@@ -53,11 +51,12 @@ jobs:
         do
           echo $file
           dir="$(dirname $file)"
+          binDir="./bin/$RUNNER_OS"
+          mkdir -p binDir
           if [[ "$dir" == *build/texgen ]]
           then
             echo "build found: $file"
-            mkdir -p ./bin
-            mv $file ./bin
+            mv $file binDir
           fi
         done
     - name: Make release note
@@ -66,5 +65,62 @@ jobs:
     - name: Commiting changes
       run: |
         git add -A
-        git commit -m "Release on branch $GITHUB_HEAD_REF generated"
+        git commit -m "Release on branch $GITHUB_HEAD_REF for RUNNER_OS generated"
         git push
+  
+  release-windows:
+    needs: [release-ununtu] # Just not to make 2 commits at one time
+    runs-on: windows-latest
+    steps:
+    - uses: actions/checkout@v3
+    - uses: actions/setup-haskell@v1
+      with:
+        ghc-version: '8.10.3'
+        cabal-version: '3.2'
+    - name: Setting up git
+      run: |
+        git config --global user.name 'Release bot'
+        git fetch
+        git checkout $GITHUB_HEAD_REF
+
+    - name: Cache
+      uses: actions/cache@v3
+      env:
+        cache-name: cache-cabal
+      with:
+        path: ~/.cabal
+        key: ${{ runner.os }}-build-${{ env.cache-name }}-${{ hashFiles('**/*.cabal') }}-${{ hashFiles('**/cabal.project') }}
+        restore-keys: |
+          ${{ runner.os }}-build-${{ env.cache-name }}-
+          ${{ runner.os }}-build-
+          ${{ runner.os }}-
+    - name: Install dependencies
+      run: |
+        cabal update
+        cabal build --only-dependencies
+    - name: Build
+      run: cabal build texgen -O2
+    - name: Move binary
+      run: |
+        @set binDir="bin/$RUNNER_OS"
+        @if not exist %binDir% (
+          @mkdir %binDir%
+        )
+        @for /r ./dist-newstyle %%a in (*) do @(
+            @if "%%~na"=="example" set file=%%a    
+        )
+        @if defined file (
+            @echo %file%
+            @mv %file% binDir
+        ) else (
+            @echo File not found
+        )
+    - name: Make release note
+      run: |
+        echo "$(date +"%Y-%m-%d %T"): on branch $GITHUB_HEAD_REF" >> bin/release-notes.txt
+    - name: Commiting changes
+      run: |
+        git add -A
+        git commit -m "Release on branch $GITHUB_HEAD_REF for $RUNNER_OS generated"
+        git push
+    
