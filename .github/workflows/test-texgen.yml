@@ -63,3 +63,5 @@ jobs:
           echo "Printing diff $curOut $savedOut"
           sdiff --ignore-trailing-space -l $curOut $savedOut | cat -n | grep -v -e '($' || :
         done
+    - name: Printing all
+      run: ls -R
