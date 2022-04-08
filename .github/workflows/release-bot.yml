@@ -47,6 +47,21 @@ jobs:
         cabal build --only-dependencies
     - name: Build
       run: cabal build texgen -O2
-    - name: Copy binary
+    - name: Move binary
       run: |
-        ls -R 
+        for file in $(find . -name "texgen*"
+        do
+          echo $file
+          dir="$(dirname $file)"
+          if [[ "$dir" == *build/texgen ]]
+          then
+            echo "build found: $file"
+            mkdir -p ./bin
+            mv $file ./bin
+          fi 
+        done
+    - name: Commiting changes
+      run: |
+        git add -A
+        git commit -m "Release on branch $GITHUB_HEAD_REF generated"
+        git push
