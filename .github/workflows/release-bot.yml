@@ -49,7 +49,7 @@ jobs:
       run: cabal build texgen -O2
     - name: Move binary
       run: |
-        for file in $(find . -name "texgen*")
+        for file in $(find . -name "texgen*" -type f)
         do
           echo $file
           dir="$(dirname $file)"
