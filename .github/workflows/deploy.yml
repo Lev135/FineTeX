@@ -6,8 +6,6 @@ name: deploy
 on:
   push:
     branches: [ master ]
-  pull_request:
-    branches: [ master ]
 
 # Set up this variable for yourselves
 env:
