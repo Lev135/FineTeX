@@ -67,7 +67,7 @@ jobs:
         env:
           cache-name: cache-cabal
         with:
-          path: ~/.cabal
+          path: "%APPDATA%/cabal"
           key: ${{ runner.os }}-build-${{ env.cache-name }}-${{ hashFiles('**/*.cabal') }}-${{ hashFiles('**/cabal.project') }}
           restore-keys: |
             ${{ runner.os }}-build-${{ env.cache-name }}-
