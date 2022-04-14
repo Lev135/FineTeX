@@ -1,0 +1,149 @@
+# This is a workflow for automatic deployment of Haskell application
+
+name: deploy
+
+# Controls when the workflow will run. Configure them for yourself
+on:
+  push:
+    branches: [ master ]
+  pull_request:
+    branches: [ master ]
+
+# Set up this variable for yourselves
+env:
+  proj-name: texgen
+
+jobs:
+  # On ubuntu
+  ubuntu:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v3
+      - uses: haskell/actions/setup@v1
+        with:
+          ghc-version: '8.10.3'
+          cabal-version: '3.6.2.0'
+      - name: Cache
+        uses: actions/cache@v3
+        env:
+          cache-name: cache-cabal
+        with:
+          path: ~/.cabal
+          key: ${{ runner.os }}-build-${{ env.cache-name }}-${{ hashFiles('**/*.cabal') }}-${{ hashFiles('**/cabal.project') }}
+          restore-keys: |
+            ${{ runner.os }}-build-${{ env.cache-name }}-
+            ${{ runner.os }}-build-
+            ${{ runner.os }}-
+      - name: Install dependencies
+        run: |
+          cabal update
+          cabal build --only-dependencies
+      - name: Build
+        run: |
+          cabal build ${{ env.proj-name }} # the next command doesn't work with -O2 unfortunately
+
+      - name: Moving binary
+        run: mv "$(cabal list-bin ${{ env.proj-name }})" "./${{ github.job }}-build"
+      
+      - name: Artifact binary
+        uses: actions/upload-artifact@v2
+        with:
+          path: "./${{ github.job }}-build"
+          name: "${{ github.job }}-build"
+  
+  # On windows
+  windows:
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v3
+      - uses: haskell/actions/setup@v1
+        with:
+          ghc-version: '8.10.3'
+          cabal-version: '3.6.2.0'
+      - name: Cache
+        uses: actions/cache@v3
+        env:
+          cache-name: cache-cabal
+        with:
+          path: ~/.cabal
+          key: ${{ runner.os }}-build-${{ env.cache-name }}-${{ hashFiles('**/*.cabal') }}-${{ hashFiles('**/cabal.project') }}
+          restore-keys: |
+            ${{ runner.os }}-build-${{ env.cache-name }}-
+            ${{ runner.os }}-build-
+            ${{ runner.os }}-
+      - name: Install dependencies
+        run: |
+          cabal update
+          cabal build --only-dependencies
+      - name: Build
+        run: |
+          cabal build ${{ env.proj-name }} # the next command doesn't work with -O2 unfortunately
+
+      - name: Moving binary
+        run: mv "$(cabal list-bin ${{ env.proj-name }})" "./${{ github.job }}-build"
+      
+      - name: Artifact binary
+        uses: actions/upload-artifact@v2
+        with:
+          path: "./${{ github.job }}-build"
+          name: "${{ github.job }}-build"
+  
+  # Deploy cached binaries
+  deploy:
+    needs: [ ubuntu, windows ]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Make release dir
+        run: |
+          mkdir -p ./release
+      
+      - name: Start deploy ${{ env.job-name }}
+        run: |
+          echo "job-name=${{ env.job-name }}" >> $GITHUB_ENV
+          echo "path=./release/${{ env.job-name }}-build" >> $GITHUB_ENV
+          echo "output-file-name=${{ env.output-file-name }}" >> $GITHUB_ENV
+        env:
+          job-name: ubuntu
+          output-file-name: "${{ env.proj-name }}"
+      - name: Use artifact ${{ env.job-name }}
+        uses: actions/download-artifact@v2
+        with:
+          name: "${{ env.job-name }}-build"
+          path: "./release"
+      - name: Ls
+        run: ls -R ./release
+      - name: Deploy
+        uses: adityak74/google-drive-upload-git-action@main
+        with:
+          credentials: ${{ secrets.credentials }}
+          filename: "${{ env.path }}"
+          name: ${{ env.output-file-name }}  
+          folderId: ${{ secrets.folderId }} 
+          overwrite: "true"
+      
+      - name: Start deploy ${{ env.job-name }}
+        run: |
+          echo "job-name=${{ env.job-name }}" >> $GITHUB_ENV
+          echo "path=./release/${{ env.job-name }}-build" >> $GITHUB_ENV
+          echo "output-file-name=${{ env.output-file-name }}" >> $GITHUB_ENV
+        env:
+          job-name: windows
+          output-file-name: "${{ env.proj-name }}.exe"
+      - name: Use artifact ${{ env.job-name }}
+        uses: actions/download-artifact@v2
+        with:
+          name: "${{ env.job-name }}-build"
+          path: "./release"
+      - name: Ls
+        run: ls -R ./release
+      - name: Deploy
+        uses: adityak74/google-drive-upload-git-action@main
+        with:
+          credentials: ${{ secrets.credentials }}
+          filename: "${{ env.path }}"
+          name: ${{ env.output-file-name }} 
+          folderId: ${{ secrets.folderId }} 
+          overwrite: "true"
+  
