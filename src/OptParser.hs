@@ -1,11 +1,13 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE GADTs #-}
 module OptParser (
-    OptParser (..), (<||>), (<??>), mkOptP, toParsec
+    OptParser (..), (<||>), (<??>), mkOptP, toParsec,
+    flagP
 ) where
 import Prelude hiding (fail)
 
-import Control.Applicative (Alternative (empty, (<|>), many))
+import Control.Applicative
+    ( Alternative(empty, (<|>), many), optional )
 import Control.Monad.Fail (MonadFail (fail))
 import Data.Text (Text)
 import qualified Data.Text as T
@@ -19,13 +21,15 @@ import Data.Bifunctor (Bifunctor(second, first))
 import Data.Char (isSpace)
 import Utils (eitherFail)
 import Control.Monad.State (StateT (StateT, runStateT))
-import Control.Monad.Trans ( MonadTrans(lift) ) 
+import Control.Monad.Trans ( MonadTrans(lift) )
 import Text.Megaparsec.Char (string, eol)
 import Control.Monad.Except (MonadError (throwError))
 import Data.Either.Extra (maybeToEither)
 import Data.List ( intercalate )
 import qualified Data.List.NonEmpty as NE
 import Data.List.NonEmpty (fromList)
+import Data.Maybe (isJust)
+import Control.Monad (void)
 
 type Parser = Parsec Void Text
 
@@ -51,7 +55,7 @@ newtype OptParser a = OptParser {
     deriving (Functor, Applicative, Monad, MonadError OptParserError)
 
 withNonCriticalE :: OptParserError -> Either OptParserError a -> Either OptParserError a
-withNonCriticalE e ma = case e of 
+withNonCriticalE e ma = case e of
     Empty                   -> ma
     NotFoundOption {}       -> ma
     IncorrectCombination{}  -> Left e
@@ -62,15 +66,15 @@ instance Alternative OptParser where
     pa <|> pb = OptParser $ StateT $ \xs ->
         case parseOptions pa xs of
             Right a -> Right a
-            Left  e -> withNonCriticalE e $ parseOptions pb xs  
+            Left  e -> withNonCriticalE e $ parseOptions pb xs
 
 parseOptions :: OptParser a -> Opts -> Either OptParserError (a, Opts)
-parseOptions pa = runStateT (runOptParser pa)  
+parseOptions pa = runStateT (runOptParser pa)
 
 -- StateT s m a -> s -> m a
 -- | Strict alternative
 (<||>) :: OptParser a -> OptParser a -> OptParser a
-pa <||> pa' = OptParser $ StateT $ \xs -> 
+pa <||> pa' = OptParser $ StateT $ \xs ->
     case (parseOptions pa xs, parseOptions pa' xs) of
         (Left e, ma) -> withNonCriticalE e ma
         (ma, Left _) -> ma
@@ -81,7 +85,7 @@ pa <||> pa' = OptParser $ StateT $ \xs ->
 (<??>) :: OptParser a -> [String] -> OptParser a
 pa <??> opts = OptParser $ StateT $ \xs ->
     case parseOptions pa xs of
-        Left  (IncorrectCombination opts') 
+        Left  (IncorrectCombination opts')
             -> Left $ IncorrectCombination $ opts' <> opts
         ma  -> ma
 
@@ -93,8 +97,8 @@ mkOptP name p = OptParser $ StateT $ \opts -> do
 
 toParsec :: Parser OptName -> Parser Text -> OptParser a -> Parser a
 toParsec optNameP optArgsConsumer optP = do
-    opts <- flip manyTill (lookAhead eol) $ do
-        nameOffset  <- getOffset 
+    opts <- flip manyTill (lookAhead $ void eol <|> eof) $ do
+        nameOffset  <- getOffset
         name        <- optNameP
         offset      <- getOffset
         args        <- optArgsConsumer
@@ -108,17 +112,18 @@ toParsec optNameP optArgsConsumer optP = do
     where
         mkErr Empty                          = fail   "empty"
         mkErr (IncorrectCombination opts)    = fail $ "Incorrect combination of options: " <> optsStr <> " cannot be used at once"
-            where optsStr = intercalate ", " opts 
+            where optsStr = intercalate ", " opts
         mkErr (NotFoundOption name)          = fail $ "Option not found: " <> T.unpack name
         mkErr (ArgParsingError n OptVal{offset} e) = parseError (h e offset)
             where
                 h (ParseErrorBundle es s) offset = incOffset offset $ NE.head es
-        
+
         incOffset pos (TrivialError p a b) = TrivialError (p + pos) a b
         incOffset _ _ = undefined
-        
+
         checkDistinct [] = return ()
         checkDistinct (x : xs) | x `elem` xs = fail $ "Multiple option: " ++ show x
                                | otherwise   = checkDistinct xs
 
-
+flagP :: Text -> OptParser Bool
+flagP name = isJust <$> optional (mkOptP name (return ()))
