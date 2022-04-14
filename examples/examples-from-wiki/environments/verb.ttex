@@ -1,0 +1,19 @@
+@Define 
+  @Environments
+    Tex       = @Verb
+    Verbatim  = @TexBeginEnd "verbatim" @Verb
+    Document  = @TexBeginEnd "document"
+
+@Tex
+  % Include packages in `@Tex` environment to 
+  % prevent translator working with them as paragraph 
+  \documentclass[12pt,a4paper,oneside]{article}
+  \usepackage[utf8]{inputenc}
+
+@Document
+  Hello, \LaTeX!
+  @Verbatim
+    \begin{enumerate}
+      \item one
+      \item two
+    \end{enumerate}
