@@ -3,7 +3,7 @@ module Generator where
 import Prelude hiding (readFile, fail)
 import Utils ( sepBy_, failMsg, (.:), withError, eitherFail )
 import OptParser ( OptParser, (<||>), (<??>), mkOptP, toParsec )
-import Text.Megaparsec(Parsec, MonadParsec (takeWhileP, label, takeWhile1P, try, notFollowedBy, lookAhead, eof, getParserState), Pos, sepBy1, sepBy, unPos, (<?>), choice, optional, parse, errorBundlePretty, mkPos, satisfy, manyTill, option, anySingle, someTill, setParserState)
+import Text.Megaparsec(Parsec, MonadParsec (takeWhileP, label, takeWhile1P, try, notFollowedBy, lookAhead, eof, getParserState), Pos, sepBy1, sepBy, unPos, (<?>), choice, optional, parse, errorBundlePretty, mkPos, satisfy, manyTill, option, anySingle, someTill, setParserState, unexpected, ErrorItem (Label), manyTill_)
 import Text.Megaparsec.Char ( char, space1, eol, letterChar, string )
 import qualified Text.Megaparsec.Char.Lexer as L
 
@@ -23,6 +23,7 @@ import Data.Text.Encoding (decodeUtf8)
 import qualified Data.Map as M
 import Data.Map (Map)
 import Text.Megaparsec.Debug (dbg)
+import Data.List.NonEmpty (fromList)
 
 -- Primitives
 
@@ -57,8 +58,15 @@ atLexeme :: Text -> Parser Text
 atLexeme = strLexeme . ("@" <>)
 
 pStringBetween :: Char -> Parser Text
-pStringBetween ch = chP *> (T.pack <$> manyTill L.charLiteral chP)
-    where chP = string $ T.singleton ch
+pStringBetween bCh = do
+        bChP 
+        (str, isEol) <- manyTill_ L.charLiteral (False <$ bChP <|> True <$ lookAhead eol)
+        if isEol
+        then unexpected (Label $ fromList "end of line")
+        else return $ T.pack str
+    where 
+        bChP = char bCh
+            
 
 pStringLiteralL :: Parser Text
 pStringLiteralL = lexeme (choice (pStringBetween <$> ['"', '\'']))
