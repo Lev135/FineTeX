@@ -1,13 +1,13 @@
 @Define
   @Environments
     Document       = @TexBeginEnd "document"
-    Equation       = @TexBeginEnd "equation" @Math
+    Equation       = @TexBeginEnd "equation" @Math @NoPrefInside
     Section    (name : String) = @Begin "\\section{$name}"
     Subsection (name : String) = @Begin "\\subsection{$name}"
     Tex            = @Verb
 
   @Prefs
-    >              = @TexBeginEnd "align*"    @Math  @Sep "\\\\"
+    >              = @TexBeginEnd "align*"    @Math  @Sep "\\\\" @NoPrefInside
     -              = @TexBeginEnd "itemize"   @Pref "\\item"
     #              = @TexBeginEnd "enumerate" @Pref "\\item"
   @MathCommands

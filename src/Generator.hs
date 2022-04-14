@@ -2,8 +2,8 @@ module Generator where
 
 import Prelude hiding (readFile, fail)
 import Utils ( sepBy_, failMsg, (.:), withError, eitherFail )
-import OptParser ( OptParser, (<||>), (<??>), mkOptP, toParsec )
-import Text.Megaparsec(Parsec, MonadParsec (takeWhileP, label, takeWhile1P, try, notFollowedBy, lookAhead, eof, getParserState), Pos, sepBy1, sepBy, unPos, (<?>), choice, optional, parse, errorBundlePretty, mkPos, satisfy, manyTill, option, anySingle, someTill, setParserState)
+import OptParser ( OptParser, (<||>), (<??>), mkOptP, toParsec, flagP )
+import Text.Megaparsec(Parsec, MonadParsec (takeWhileP, label, takeWhile1P, try, notFollowedBy, lookAhead, eof, getParserState), Pos, sepBy1, sepBy, unPos, (<?>), choice, optional, parse, errorBundlePretty, mkPos, satisfy, manyTill, option, anySingle, someTill, setParserState, unexpected, ErrorItem (Label), manyTill_)
 import Text.Megaparsec.Char ( char, space1, eol, letterChar, string )
 import qualified Text.Megaparsec.Char.Lexer as L
 
@@ -23,6 +23,7 @@ import Data.Text.Encoding (decodeUtf8)
 import qualified Data.Map as M
 import Data.Map (Map)
 import Text.Megaparsec.Debug (dbg)
+import Data.List.NonEmpty (fromList)
 
 -- Primitives
 
@@ -57,8 +58,15 @@ atLexeme :: Text -> Parser Text
 atLexeme = strLexeme . ("@" <>)
 
 pStringBetween :: Char -> Parser Text
-pStringBetween ch = chP *> (T.pack <$> manyTill L.charLiteral chP)
-    where chP = string $ T.singleton ch
+pStringBetween bCh = do
+        bChP 
+        (str, isEol) <- manyTill_ L.charLiteral (False <$ bChP <|> True <$ lookAhead eol)
+        if isEol
+        then unexpected (Label $ fromList "end of line")
+        else return $ T.pack str
+    where 
+        bChP = char bCh
+            
 
 pStringLiteralL :: Parser Text
 pStringLiteralL = lexeme (choice (pStringBetween <$> ['"', '\'']))
@@ -167,19 +175,22 @@ data Argument = Argument {
 newtype ArgV = ArgVString Text
     deriving Show
 
+
 data Environment = Environment {
         name                :: Text,
         begin, end          :: Maybe Text,
         args                :: [Argument],
         innerMath           :: Bool,
-        innerVerb           :: Bool
+        innerVerb           :: Bool,
+        insidePref          :: Bool
     }
     deriving Show
 data Pref = Pref {
         name        :: Text,
         begin, end  :: Maybe Text,
         pref,  sep  :: Maybe Text,
-        innerMath   :: Bool
+        innerMath   :: Bool,
+        insidePref  :: Bool
     }
     deriving Show
 data Command  = Command {
@@ -248,25 +259,30 @@ pEnvsDef = inEnvironment "Environments" Nothing id $ do
         name         <- pIdentifierL
         args         <- pDefArgs
         strLexeme    "="
-        ((begin, end), innerMath, innerVerb) <- pOpt $ (,,) <$> pBeginEndOpt <*> mathP <*> verbP
+        ((begin, end), innerMath, innerVerb, insidePref) 
+            <- pOpt $ do
+                beginEnd     <- pBeginEndOpt
+                math         <- flagP "Math"
+                verb         <- flagP "Verb"
+                insidePref   <- not <$> flagP "NoPrefInside"
+                return (beginEnd, math, verb, insidePref)
         eol
-        return Environment{ name, begin, end, args, innerMath, innerVerb}
-    where
-        mathP = isJust <$> optional (mkOptP "Math" (return ()))
-        verbP = isJust <$> optional (mkOptP "Verb" (return ()))
+        return Environment{ name, begin, end, args, innerMath, innerVerb, insidePref }
 
 pPrefDef :: Parser [Pref]
 pPrefDef = inEnvironment "Prefs" Nothing id $ do
         name      <- pPrefixL
         strLexeme "="
-        ((begin, end), pref, sep, innerMath) <- pOpt
-                    $ (,,,) <$> pBeginEndOpt <*> prefP <*> sepP <*> mathP
+        ((begin, end), pref, sep, innerMath, insidePref) 
+            <- pOpt $ do
+                beginEnd    <- pBeginEndOpt 
+                pref        <- optional (mkOptP "Pref" pStringLiteralL)
+                sep         <- optional (mkOptP "Sep"  pStringLiteralL)
+                math        <- flagP "Math"
+                insidePref  <- not <$> flagP "NoPrefInside"
+                return (beginEnd, pref, sep, math, insidePref)
         eol
-        return Pref{name, begin, end, pref, sep, innerMath}
-    where
-        prefP = optional (mkOptP "Pref" pStringLiteralL)
-        sepP  = optional (mkOptP "Sep"  pStringLiteralL)
-        mathP = isJust <$> optional (mkOptP "Math" (return ()))
+        return Pref{name, begin, end, pref, sep, innerMath, insidePref}
 
 -- Processing definitions
 
@@ -313,24 +329,24 @@ data ParEl
     deriving Show
 
 pDocument :: Definitions -> Parser [DocElement]
-pDocument defs = scn *> pElements IndGEQ 0 defs <* scn
+pDocument defs = scn *> pElements True IndGEQ 0 defs <* scn
 
-pElements :: IndentOrd -> Int -> Definitions -> Parser [DocElement]
-pElements ord ind defs = block' (Just DocEmptyLine) (pElement defs) ord ind
+pElements :: Bool -> IndentOrd -> Int -> Definitions -> Parser [DocElement]
+pElements enPref ord ind defs = block' (Just DocEmptyLine) (pElement enPref defs) ord ind
 
-pElement :: Definitions -> Parser DocElement
-pElement defs
-     =  pPrefLineEnvironment defs
-    <|> pEnvironment         defs
-    <|> pParagraph           defs
+pElement :: Bool -> Definitions -> Parser DocElement
+pElement enPref defs = choice $
+       [pPrefLineEnvironment defs | enPref ]
+    <> [pEnvironment         defs
+    ,   pParagraph           defs ]
 
 pPrefLineEnvironment :: Definitions -> Parser DocElement
-pPrefLineEnvironment defs@Definitions{prefs, envs} = do
+pPrefLineEnvironment defs@Definitions{prefs} = do
     s <- getParserState
     (name, ind)  <- (,) <$> try (pPrefix <* string " ") <*> indentLevel
-    pref  <- M.lookup name prefs `failMsg` "Unexpected prefix: " ++ unpack name
+    pref@Pref{insidePref}  <- M.lookup name prefs `failMsg` "Unexpected prefix: " ++ unpack name
     setParserState s
-    DocPrefGroup pref <$> block (try (string $ name <> " ") *> pElements IndGEQ ind defs)
+    DocPrefGroup pref <$> block (try (string $ name <> " ") *> pElements insidePref IndGEQ ind defs)
 
 pParagraph :: Definitions -> Parser DocElement
 pParagraph defs = do
@@ -372,12 +388,14 @@ pEnvironment :: Definitions -> Parser DocElement
 pEnvironment defs@Definitions{envs} = do
     ind <- indentLevel
     name <- string "@" *> pIdentifierL
-    env <- M.lookup name envs `failMsg` ("Undefined environment " ++ show name)
+    env@Environment{innerVerb, insidePref} 
+        <- M.lookup name envs `failMsg` ("Undefined environment " ++ show name)
     args <- mapM pArgV (atype <$> args env)
     sc <* eol
-    DocEnvironment env args <$> if innerVerb env
-    then (:[]) <$> pVerb ind
-    else pElements IndGT ind defs
+    DocEnvironment env args <$> 
+        if innerVerb
+            then (:[]) <$> pVerb ind
+            else pElements insidePref IndGT ind defs
 
 -- File readers and parsers
 
