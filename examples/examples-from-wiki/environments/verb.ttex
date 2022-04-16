@@ -2,6 +2,7 @@
   @Environments
     Tex       = @Verb
     Verbatim  = @TexBeginEnd "verbatim" @Verb
+    Verbatim' = @TexBeginEnd "verbatim" @VerbIndent
     Document  = @TexBeginEnd "document"
 
 @Tex
@@ -11,9 +12,17 @@
   \usepackage[utf8]{inputenc}
 
 @Document
-  Hello, \LaTeX!
+  Hello, \LaTeX! \\
+  Verbatim with extra indentation and spaces
   @Verbatim
     \begin{enumerate}
       \item one
       \item two
     \end{enumerate}
+  Verbatim without extra indentation and spaces
+  @Verbatim'
+    \begin{enumerate}
+      \item one
+      \item two
+    \end{enumerate}
+  looks much greater!) 

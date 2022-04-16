@@ -2,7 +2,7 @@
 {-# LANGUAGE GADTs #-}
 module OptParser (
     OptParser (..), (<||>), (<??>), mkOptP, toParsec,
-    flagP
+    labelOpt, flagOpt
 ) where
 import Prelude hiding (fail)
 
@@ -43,6 +43,7 @@ data OptVal = OptVal {
 
 data OptParserError
     = Empty
+    | LabelError String
     | IncorrectCombination [String]
     | NotFoundOption OptName
     | ArgParsingError OptName OptVal (ParseErrorBundle Text Void)
@@ -57,6 +58,7 @@ newtype OptParser a = OptParser {
 withNonCriticalE :: OptParserError -> Either OptParserError a -> Either OptParserError a
 withNonCriticalE e ma = case e of
     Empty                   -> ma
+    LabelError {}           -> Left e
     NotFoundOption {}       -> ma
     IncorrectCombination{}  -> Left e
     ArgParsingError {}      -> Left e
@@ -67,6 +69,9 @@ instance Alternative OptParser where
         case parseOptions pa xs of
             Right a -> Right a
             Left  e -> withNonCriticalE e $ parseOptions pb xs
+
+instance MonadFail OptParser where
+    fail = OptParser . StateT . const . Left . LabelError
 
 parseOptions :: OptParser a -> Opts -> Either OptParserError (a, Opts)
 parseOptions pa = runStateT (runOptParser pa)
@@ -111,6 +116,7 @@ toParsec optNameP optArgsConsumer optP = do
                     in parseError $ TrivialError nameOffset (Just lbl) mempty
     where
         mkErr Empty                          = fail   "empty"
+        mkErr (LabelError err)               = fail err
         mkErr (IncorrectCombination opts)    = fail $ "Incorrect combination of options: " <> optsStr <> " cannot be used at once"
             where optsStr = intercalate ", " opts
         mkErr (NotFoundOption name)          = fail $ "Option not found: " <> T.unpack name
@@ -125,5 +131,8 @@ toParsec optNameP optArgsConsumer optP = do
         checkDistinct (x : xs) | x `elem` xs = fail $ "Multiple option: " ++ show x
                                | otherwise   = checkDistinct xs
 
-flagP :: Text -> OptParser Bool
-flagP name = isJust <$> optional (mkOptP name (return ()))
+labelOpt :: Text -> OptParser ()
+labelOpt name = mkOptP name (return ())
+
+flagOpt :: Text -> OptParser Bool
+flagOpt name = isJust <$> optional (labelOpt name)
