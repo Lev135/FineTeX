@@ -1,8 +1,8 @@
 module Generator where
 
 import Prelude hiding (readFile, fail)
-import Utils ( sepBy_, failMsg, (.:), withError, eitherFail )
-import OptParser ( OptParser, (<||>), (<??>), mkOptP, toParsec, flagP )
+import Utils ( sepBy_, failMsg, (.:), withError, eitherFail, listSepBy_ )
+import OptParser ( OptParser, (<||>), (<??>), mkOptP, toParsec, flagOpt, labelOpt )
 import Text.Megaparsec(Parsec, MonadParsec (takeWhileP, label, takeWhile1P, try, notFollowedBy, lookAhead, eof, getParserState), Pos, sepBy1, sepBy, unPos, (<?>), choice, optional, parse, errorBundlePretty, mkPos, satisfy, manyTill, option, anySingle, someTill, setParserState, unexpected, ErrorItem (Label), manyTill_)
 import Text.Megaparsec.Char ( char, space1, eol, letterChar, string )
 import qualified Text.Megaparsec.Char.Lexer as L
@@ -10,7 +10,7 @@ import qualified Text.Megaparsec.Char.Lexer as L
 import Data.Void(Void)
 import Data.Text (Text, pack, unpack)
 import qualified Data.Text as T
-import Control.Monad ( void, when, unless, join, guard, forM, replicateM, (>=>) )
+import Control.Monad ( void, when, unless, join, guard, forM, replicateM, (>=>), replicateM_ )
 import Control.Applicative ( Alternative(empty, (<|>), some, many) )
 import Data.Maybe (maybeToList, isJust, mapMaybe, fromMaybe)
 import Data.Bifunctor (Bifunctor(second, first))
@@ -166,13 +166,15 @@ data Argument = Argument {
 newtype ArgV = ArgVString Text
     deriving Show
 
+data VerbMode = NoVerb | Verb | VerbIndent
+    deriving Show
 
 data Environment = Environment {
         name                :: Text,
         begin, end          :: Maybe Text,
         args                :: [Argument],
         innerMath           :: Bool,
-        innerVerb           :: Bool,
+        innerVerb           :: VerbMode,
         insidePref          :: Bool
     }
     deriving Show
@@ -226,6 +228,8 @@ pDefArgs = many $ do
     strLexeme ")"
     return Argument{name, atype}
 
+
+-- option (Nothing, Nothing) $    -- лишнее, вроде бы
 pBeginEndOpt :: OptParser (Maybe Text, Maybe Text)
 pBeginEndOpt = option (Nothing, Nothing) $ texBEP <||> simpleBEP <??> ["@TexBeginEnd", "@Begin @End"]
     where
@@ -253,9 +257,13 @@ pEnvsDef = inEnvironment "Environments" Nothing id $ do
         ((begin, end), innerMath, innerVerb, insidePref)
             <- pOpt $ do
                 beginEnd     <- pBeginEndOpt
-                math         <- flagP "Math"
-                verb         <- flagP "Verb"
-                insidePref   <- not <$> flagP "NoPrefInside"
+                math         <- flagOpt "Math"
+                verb         <- option NoVerb (
+                                (Verb <$ labelOpt "Verb")
+                           <||> (VerbIndent <$ labelOpt "VerbIndent")
+                           <??> ["Verb", "VerbIndent"]
+                        )
+                insidePref   <- not <$> flagOpt "NoPrefInside"
                 return (beginEnd, math, verb, insidePref)
         eol
         return Environment{ name, begin, end, args, innerMath, innerVerb, insidePref }
@@ -269,8 +277,8 @@ pPrefDef = inEnvironment "Prefs" Nothing id $ do
                 beginEnd    <- pBeginEndOpt
                 pref        <- optional (mkOptP "Pref" pStringLiteralL)
                 sep         <- optional (mkOptP "Sep"  pStringLiteralL)
-                math        <- flagP "Math"
-                insidePref  <- not <$> flagP "NoPrefInside"
+                math        <- flagOpt "Math"
+                insidePref  <- not <$> flagOpt "NoPrefInside"
                 return (beginEnd, pref, sep, math, insidePref)
         eol
         return Pref{name, begin, end, pref, sep, innerMath, insidePref}
@@ -311,7 +319,7 @@ data DocElement
     | DocEnvironment   Environment [ArgV] [DocElement]
     | DocPrefGroup     Pref [[DocElement]]
     | DocEmptyLine
-    | DocVerb          [Text]
+    | DocVerb          Bool [Text]
     deriving Show
 
 data ParEl
@@ -363,15 +371,20 @@ pParLine = notFollowedBy (string "@") *> some (pText <|> pForm) <* sc <* eol
 pArgV :: ArgType -> Parser ArgV
 pArgV ArgString = ArgVString <$> pStringLiteralL
 
-pVerb :: Int -> Parser DocElement
-pVerb ind = DocVerb <$> do
+pVerb :: Bool -> Int -> Parser DocElement
+pVerb verbInd ind = DocVerb verbInd <$> do
         indGuard
         ind' <- indentLevel
-        concat <$> pLine `sepBy` try (checkIndent ind')
+        pLine `listSepBy_` sep ind'
     where
-        pLine = (:) . T.pack <$> manyTill anySingle eol
-            <*> many (try $ T.empty <$ many lineSpace <* eol)
-        checkIndent ind' = lookAhead indGuard >> replicateM ind' (char ' ' <|> char '\t')
+        pLine = (:[]) . T.pack <$> manyTill anySingle eol
+        sep :: Int -> Parser [Text]
+        sep ind' = do
+            lookAhead . try $ many space1 >> indGuard
+            emptyLs <- many (try $ T.empty <$ many lineSpace <* eol)
+            lookAhead indGuard
+            replicateM_ ind' $ char ' '
+            return emptyLs
         indGuard = L.indentGuard (void $ many lineSpace) GT posInd
         posInd = mkPos $ ind + 1
 
@@ -384,9 +397,10 @@ pEnvironment defs@Definitions{envs} = do
     args <- mapM pArgV (atype <$> args env)
     sc <* eol
     DocEnvironment env args <$>
-        if innerVerb
-            then (:[]) <$> pVerb ind
-            else pElements insidePref IndGT ind defs
+        case innerVerb of
+            NoVerb      -> pElements insidePref IndGT ind defs
+            Verb        -> (:[]) <$> pVerb False ind
+            VerbIndent  -> (:[]) <$> pVerb True ind
 
 -- File readers and parsers
 

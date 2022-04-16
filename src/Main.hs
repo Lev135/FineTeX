@@ -16,6 +16,10 @@ import Data.List.Extra (spanEnd)
 import Control.Applicative (Alternative((<|>)))
 import Options.Applicative (readerError)
 import qualified IOUtils
+import qualified Prettyprinter as P
+import Data.Void (Void)
+import qualified Data.Text as T 
+import Data.Char (isSpace)
 
 parsePart :: Parser a -> Text -> Either String a
 parsePart p s = case parse p "" s of
@@ -31,9 +35,38 @@ processFile Options{ inpFile, outpFile, pageWidth, printOpts } = do
     case res of
       Left   e             -> IOUtils.putStrLn e
       Right (defs, docEls) -> do
-          writeFile outpFile (encodeUtf8 . renderStrict . layoutSmart renderOpts $ texDoc printOpts defs docEls)
+          let stream = layoutSmart renderOpts $ texDoc printOpts defs docEls
+          writeFile outpFile $ encodeUtf8 . renderStrict . h $ stream
     where
         renderOpts = defaultLayoutOptions{layoutPageWidth = AvailablePerLine pageWidth 1.0}
+        h :: P.SimpleDocStream Ann -> P.SimpleDocStream Void
+        h sds = case sds of
+            P.SFail                  -> P.SFail
+            P.SEmpty                 -> P.SEmpty
+            P.SChar c rest           -> P.SChar c   $ h rest
+            P.SText l t rest         -> if noIndNext sds 
+                                        then h rest 
+                                        else P.SText l t $ h rest
+            P.SLine i rest           -> if noIndNext sds 
+                                        then P.SLine 0 $ h rest 
+                                        else P.SLine i $ h rest
+            P.SAnnPush NoIndent rest -> remInd rest
+            P.SAnnPop rest           -> h rest
+        remInd :: P.SimpleDocStream Ann -> P.SimpleDocStream Void
+        remInd = \case
+            P.SFail             -> P.SFail
+            P.SEmpty            -> P.SEmpty
+            P.SChar c rest      -> P.SChar c   $ remInd rest
+            P.SText l t rest    -> P.SText l t $ remInd rest
+            P.SLine i rest      -> P.SLine 0   $ remInd rest
+            P.SAnnPush ann rest -> remInd rest
+            P.SAnnPop rest      -> h rest
+        noIndNext :: P.SimpleDocStream Ann -> Bool
+        noIndNext = \case
+            P.SAnnPush NoIndent _ -> True
+            P.SLine _ rest -> noIndNext rest
+            P.SText _ t rest -> T.all isSpace t && noIndNext rest
+            _ -> False
 
 data Options = Options {
         inpFile         :: FilePath,
@@ -43,18 +76,18 @@ data Options = Options {
     }
 
 prefTabModeOption :: Opt.Parser PrefTabMode
-prefTabModeOption = Opt.option reader 
+prefTabModeOption = Opt.option reader
          ( Opt.long    "prefTabMode"
-        <> Opt.value   ColumnTab  
+        <> Opt.value   ColumnTab
         <> Opt.showDefaultWith show'
         <> Opt.metavar "no|normal|column"
         <> Opt.help    "How indent prefs content"
         )
-    where 
+    where
         reader = Opt.str >>= \case
-                "no"      -> return NoTab 
-                "normal"  -> return NormalTab 
-                "column"  -> return ColumnTab 
+                "no"      -> return NoTab
+                "normal"  -> return NormalTab
+                "column"  -> return ColumnTab
                 _         -> readerError "Accepted prefix tab modes are 'no', 'normal' and 'column'"
         show' = \case
             NoTab       -> "no"
@@ -82,7 +115,7 @@ options = Options
          ( Opt.long     "out"
         <> Opt.short    'o'
         <> Opt.value    ""
-        <> Opt.showDefault 
+        <> Opt.showDefault
         <> Opt.metavar  "FILE"
         <> Opt.help     "Output file. If empty filename will be the same as SOURCE with .tex extension"
         )
@@ -104,10 +137,10 @@ main = processFile . defaultOutp =<< Opt.execParser opts
             <> Opt.progDesc     "Generate file"
             <> Opt.header       ""
             )
-        defaultOutp opts@Options{inpFile, outpFile} 
+        defaultOutp opts@Options{inpFile, outpFile}
             | null outpFile = opts{outpFile = replExt "tex" inpFile}
             | otherwise     = opts
-        replExt ext' filePath 
-                = case spanEnd (/= '.') filePath of 
+        replExt ext' filePath
+                = case spanEnd (/= '.') filePath of
                     (_,     []) -> filePath <> ext'
-                    (f',    _ ) -> f' <> ext' 
+                    (f',    _ ) -> f' <> ext'
