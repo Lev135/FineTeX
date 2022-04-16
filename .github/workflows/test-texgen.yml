@@ -48,7 +48,8 @@ jobs:
           savedOut="$dir/$base.tex"
           
           cabal run texgen -- "$src" -o $curOut
-          diff --ignore-all-space $curOut $savedOut
+          echo "Printing diff --ignore-all-space $curOut $savedOut"
+          sdiff --ignore-all-space -l $curOut $savedOut | cat -n | grep -v -e '($' || :
         done
     - name: Printing output diffs
       run: |
