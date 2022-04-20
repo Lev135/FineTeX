@@ -218,9 +218,10 @@ pMathCmdsDef = inEnvironment "MathCommands" Nothing id $ do
 
 pType :: Parser ArgType
 pType = ArgString <$ strLexeme "String"
+    <?> "argument type `String`"
 
 pDefArgs :: Parser [Argument]
-pDefArgs = many $ do
+pDefArgs = many . label "argument `(<name> : <type>)`" $ do
     try $ strLexeme "("
     name  <- pIdentifierL
     strLexeme ":"
@@ -246,7 +247,7 @@ pBeginEndOpt = option (Nothing, Nothing) $ texBEP <||> simpleBEP <??> ["@TexBegi
 pOpt :: OptParser a -> Parser a
 pOpt = toParsec optNameP optArgsConsumer
     where
-        optNameP = try (string "@") >> pIdentifierL
+        optNameP = try (string "@" >> pIdentifierL) <?> "option name `@<name>`"
         optArgsConsumer = takeWhileP Nothing (`notElem` ['@', '\n', '\r', '%'])
 
 pEnvsDef :: Parser [Environment]
