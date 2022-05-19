@@ -3,7 +3,7 @@ module Generator where
 import Prelude hiding (readFile, fail)
 import Utils ( sepBy_, failMsg, (.:), withError, eitherFail, listSepBy_ )
 import OptParser ( OptParser, (<||>), (<??>), mkOptP, toParsec, flagOpt, labelOpt )
-import Text.Megaparsec(Parsec, MonadParsec (takeWhileP, label, takeWhile1P, try, notFollowedBy, lookAhead, eof, getParserState), Pos, sepBy1, sepBy, unPos, (<?>), choice, optional, parse, errorBundlePretty, mkPos, satisfy, manyTill, option, anySingle, someTill, setParserState, unexpected, ErrorItem (Label), manyTill_)
+import Text.Megaparsec(Parsec, MonadParsec (takeWhileP, label, takeWhile1P, try, notFollowedBy, lookAhead, eof, getParserState), SourcePos, getSourcePos, sepBy1, sepBy, unPos, (<?>), choice, optional, parse, errorBundlePretty, mkPos, satisfy, manyTill, option, anySingle, someTill, setParserState, unexpected, ErrorItem (Label), manyTill_)
 import Text.Megaparsec.Char ( char, space1, eol, letterChar, string )
 import qualified Text.Megaparsec.Char.Lexer as L
 
@@ -28,6 +28,8 @@ import Data.List.NonEmpty (fromList)
 -- Primitives
 
 type Parser = Parsec Void Text
+
+type Pos = (SourcePos, SourcePos)
 
 lineSpace :: Parser ()
 lineSpace = void $ char ' ' <|> char '\t'
@@ -323,9 +325,11 @@ data DocElement
     | DocVerb          Bool [Text]
     deriving Show
 
+type ParWord = (Text, Pos)
+
 data ParEl
-    = ParText       [Text] -- List of words
-    | ParFormula    [Text]
+    = ParText       [ParWord] -- List of words
+    | ParFormula    [ParWord]
     deriving Show
 
 pDocument :: Definitions -> Parser [DocElement]
@@ -360,14 +364,43 @@ words' t = h (T.head t) <> T.words t <> h (T.last t)
         h _   = []
 
 pParLine :: Parser [ParEl]
-pParLine = notFollowedBy (string "@") *> some (pText <|> pForm) <* sc <* eol
+pParLine = notFollowedBy (string "@") *> some (pForm <|> pText <|> pEmptyText) <* sc <* eol
     where
-        pText = ParText <$> (words' <$> takeWhile1P Nothing smbl)
-              <?> "Paragraph text"
-        pForm = ParFormula
-              <$> (char '`' *> (T.words <$> takeWhile1P Nothing smbl) <* char '`')
-              <?> "Inline formula"
-        smbl = (`notElem` ['`', '\n', '%'])
+        word :: Parser ParWord
+        word = do
+            begin <- getSourcePos
+            val   <- takeWhile1P Nothing smbl
+            end   <- getSourcePos
+            return (val, (begin, end))
+        sp :: Parser Char
+        sp = char ' '
+        pEmptyText = do
+            try $ lookAhead (sc *> notFollowedBy eol)
+            pos <- getSourcePos
+            some sp
+            return $ ParText $ h pos (Just ' ') 
+        pText = label "Paragraph text" $ do
+            try $ lookAhead (many sp *> satisfy smbl)
+            bPos <- getSourcePos
+            bSpace <- optional sp
+            words <- some $ do
+                try $ lookAhead (many sp *> satisfy smbl)
+                many sp *> word
+            ePos <- getSourcePos
+            eSpace <- optional . try $ do
+                lookAhead (sc *> notFollowedBy eol)
+                sp
+            many sp
+            return $ ParText $ h bPos bSpace <> words <> h ePos eSpace
+        h p (Just _) = [(T.empty, (p, p))]
+        h _ Nothing  = []
+        pForm = label "Inline formula" $ do
+            char '`'
+            many sp
+            words <- many (word <* many sp)
+            char '`'
+            return $ ParFormula words
+        smbl = (`notElem` ['`', '\r', '\n', '%', ' '])
 
 pArgV :: ArgType -> Parser ArgV
 pArgV ArgString = ArgVString <$> pStringLiteralL
@@ -420,14 +453,15 @@ pImportFiles = L.nonIndented scn $
 getImports :: FilePath -> Text -> Either String [FilePath]
 getImports = first (("get imports error: " <>) . errorBundlePretty) .: parse pImportFiles
 
-readDoc :: (MonadError String m, MonadIO m, MonadCatch m) => FilePath -> m (Definitions, [DocElement])
+readDoc :: (MonadError String m, MonadIO m, MonadCatch m)
+    => FilePath -> m (Text, (Definitions, [DocElement]))
 readDoc fileName = do
     file      <- decodeUtf8 <$> liftIO (readFile fileName)
         `catchIOError` \e -> throwError ("Unable to open file '" <> fileName <> "': " <> show e)
     impFNames <- liftEither $ getImports fileName file
-    defs      <- mconcat <$> mapM ((fst <$>) . withError addPrefix . readDoc) impFNames
+    defs      <- mconcat <$> mapM ((fst . snd <$>) . withError addPrefix . readDoc) impFNames
     case parse (pFile defs) fileName file of
         Left   e   -> throwError $ errorBundlePretty e
-        Right  res -> return res
+        Right  res -> return (file, res)
     where
         addPrefix eStr = "While processing imports from " <> fileName <> ":\n" <> eStr
