@@ -2,7 +2,8 @@ module Main where
 
 import Prelude hiding (writeFile)
 import Generator
-import Printing
+import Printer
+import Processor
 import Data.Text(Text, pack, unpack)
 import Text.Megaparsec (parse, errorBundlePretty, MonadParsec (eof), mkPos, Pos)
 import System.Environment (getArgs)
@@ -20,6 +21,7 @@ import qualified Prettyprinter as P
 import Data.Void (Void)
 import qualified Data.Text as T 
 import Data.Char (isSpace)
+import Control.Monad.Writer (runWriter)
 
 parsePart :: Parser a -> Text -> Either String a
 parsePart p s = case parse p "" s of
@@ -31,12 +33,19 @@ parseAll p = parsePart (p <* eof)
 
 processFile :: Options -> IO ()
 processFile Options{ inpFile, outpFile, pageWidth, printOpts } = do
-    res <- runExceptT (readDoc inpFile :: ExceptT String IO (Definitions, [DocElement]))
+    res <- runExceptT (readDoc inpFile 
+        :: ExceptT String IO (Text, (Definitions, [DocElement])))
     case res of
-      Left   e             -> IOUtils.putStrLn e
-      Right (defs, docEls) -> do
-          let stream = layoutSmart renderOpts $ texDoc printOpts defs docEls
-          writeFile outpFile $ encodeUtf8 . renderStrict . h $ stream
+        Left   e   -> IOUtils.putStrLn e
+        Right (file, (defs, docEls)) -> do
+            let (els', errs) = runWriter $ processDoc defs docEls
+            case errs of
+                [] -> do
+                    let stream = layoutSmart renderOpts $ texDoc printOpts els'
+                    writeFile outpFile . encodeUtf8 . renderStrict . h $ stream 
+                _  -> IOUtils.putStrLn $ T.unpack $ 
+                        T.unlines $ map (prettyError (T.lines file)) errs
+          
     where
         renderOpts = defaultLayoutOptions{layoutPageWidth = AvailablePerLine pageWidth 1.0}
         h :: P.SimpleDocStream Ann -> P.SimpleDocStream Void
