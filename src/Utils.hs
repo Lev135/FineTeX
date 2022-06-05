@@ -2,8 +2,7 @@ module Utils where
 
 import Control.Applicative (Alternative (many, (<|>)))
 import Control.Monad.Except (MonadError (catchError, throwError))
-import Control.Monad.Fail (MonadFail)
-import Data.Maybe (mapMaybe, maybeToList)
+import Data.Maybe (maybeToList)
 
 (.:) :: Functor f => (b -> c) -> (a -> f b) -> a -> f c
 f .: g = fmap f . g

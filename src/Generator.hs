@@ -1,28 +1,50 @@
 module Generator where
 
 import Control.Applicative (Alternative (empty, many, some, (<|>)))
-import Control.Monad (forM, guard, join, replicateM, replicateM_, unless, void, when, (>=>))
+import Control.Monad (replicateM_, unless, void)
 import Control.Monad.Catch (MonadCatch, catchIOError)
 import Control.Monad.Except (MonadError (throwError), MonadIO (liftIO), liftEither)
 import Control.Monad.Fail (MonadFail (fail))
-import Data.Bifunctor (Bifunctor (first, second))
+import Data.Bifunctor (Bifunctor (first))
 import Data.ByteString (readFile)
 import Data.Char (isAlphaNum, isLetter, isSpace)
 import Data.List.NonEmpty (fromList)
 import Data.Map (Map)
 import qualified Data.Map as M
-import Data.Maybe (fromMaybe, isJust, mapMaybe, maybeToList)
-import qualified Data.Set as S
-import Data.Text (Text, pack, unpack)
+import Data.Maybe (fromMaybe)
+import Data.Text (Text, unpack)
 import qualified Data.Text as T
 import Data.Text.Encoding (decodeUtf8)
 import Data.Void (Void)
 import OptParser (OptParser, flagOpt, labelOpt, mkOptP, toParsec, (<??>), (<||>))
-import Text.Megaparsec (ErrorItem (Label), MonadParsec (eof, getParserState, label, lookAhead, notFollowedBy, takeWhile1P, takeWhileP, try), Parsec, SourcePos, anySingle, choice, errorBundlePretty, failure, getOffset, getSourcePos, manyTill, manyTill_, mkPos, option, optional, parse, region, satisfy, sepBy, sepBy1, setErrorOffset, setParserState, someTill, unPos, unexpected, (<?>))
-import Text.Megaparsec.Char (char, eol, letterChar, space1, string)
+import Text.Megaparsec
+  ( ErrorItem (Label),
+    MonadParsec (eof, getParserState, label, lookAhead, notFollowedBy, takeWhile1P, takeWhileP, try),
+    Parsec,
+    SourcePos,
+    anySingle,
+    choice,
+    errorBundlePretty,
+    getOffset,
+    getSourcePos,
+    manyTill,
+    manyTill_,
+    mkPos,
+    option,
+    optional,
+    parse,
+    region,
+    satisfy,
+    sepBy,
+    setErrorOffset,
+    setParserState,
+    unPos,
+    unexpected,
+    (<?>),
+  )
+import Text.Megaparsec.Char (char, eol, space1, string)
 import qualified Text.Megaparsec.Char.Lexer as L
-import Text.Megaparsec.Debug (dbg)
-import Utils (eitherFail, failMsg, listSepBy_, sepBy_, withError, (.:))
+import Utils (failMsg, listSepBy_, sepBy_, withError, (.:))
 import Prelude hiding (fail, readFile)
 
 -- Primitives
@@ -332,7 +354,7 @@ processDefs :: [Definition] -> Definitions
 processDefs = mconcat . map processDef
 
 processDef :: Definition -> Definitions
-processDef (DefE env@Environment {name, begin, end, innerMath}) =
+processDef (DefE env@Environment {name}) =
   mempty {envs = M.singleton name env}
 processDef (DefC cmd@Command {name}) =
   mempty {cmds = M.singleton name cmd}
@@ -383,9 +405,7 @@ pPrefLineEnvironment defs@Definitions {prefs} = do
     sp = string " " <|> eol
 
 pParagraph :: Definitions -> Parser DocElement
-pParagraph defs = do
-  ind <- indentLevel
-  DocParagraph <$> block pParLine
+pParagraph _ = DocParagraph <$> block pParLine
 
 words' :: Text -> [Text]
 words' t = h (T.head t) <> T.words t <> h (T.last t)
@@ -492,7 +512,7 @@ readDoc ::
 readDoc fileName = do
   file <-
     decodeUtf8 <$> liftIO (readFile fileName)
-      `catchIOError` \e -> 
+      `catchIOError` \e ->
         throwError ("Unable to open file '" <> fileName <> "': " <> show e)
   impFNames <- liftEither $ getImports fileName file
   defs <- mconcat <$> mapM ((fst . snd <$>) . withError addPrefix . readDoc) impFNames

@@ -93,4 +93,7 @@ executable texgen
                        TupleSections
                        LambdaCase
                        FlexibleContexts
-
+  ghc-options:
+    -Wall
+    -Wno-name-shadowing
+    -Wno-unused-do-bind

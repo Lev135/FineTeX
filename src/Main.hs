@@ -1,26 +1,36 @@
+{-# OPTIONS_GHC -Wno-type-defaults #-}
+
 module Main where
 
-import Control.Applicative (Alternative ((<|>)))
-import Control.Monad.Except (ExceptT (ExceptT), runExceptT)
+import Control.Monad.Except (ExceptT, runExceptT)
 import Control.Monad.Writer (runWriter)
 import Data.ByteString (writeFile)
 import Data.Char (isSpace)
 import Data.List.Extra (spanEnd)
-import Data.Text (Text, pack, unpack)
+import Data.Text (Text)
 import qualified Data.Text as T
 import Data.Text.Encoding (encodeUtf8)
 import Data.Void (Void)
-import Generator
+import Generator (Definitions, DocElement, Parser, readDoc)
 import qualified IOUtils
 import Options.Applicative (readerError)
 import qualified Options.Applicative as Opt
-import Prettyprinter (LayoutOptions (..), PageWidth (AvailablePerLine), defaultLayoutOptions, layoutPretty, layoutSmart)
+import Prettyprinter
+  ( LayoutOptions (..),
+    PageWidth (AvailablePerLine),
+    defaultLayoutOptions,
+    layoutSmart,
+  )
 import qualified Prettyprinter as P
 import Prettyprinter.Render.Text (renderStrict)
 import Printer
-import Processor
-import System.Environment (getArgs)
-import Text.Megaparsec (MonadParsec (eof), Pos, errorBundlePretty, mkPos, parse)
+  ( Ann (..),
+    PrefTabMode (..),
+    PrintOpts (PrintOpts),
+    texDoc,
+  )
+import Processor (prettyError, processDoc)
+import Text.Megaparsec (MonadParsec (eof), errorBundlePretty, parse)
 import Prelude hiding (writeFile)
 
 parsePart :: Parser a -> Text -> Either String a
@@ -73,8 +83,8 @@ processFile Options {inpFile, outpFile, pageWidth, printOpts} = do
       P.SEmpty -> P.SEmpty
       P.SChar c rest -> P.SChar c $ remInd rest
       P.SText l t rest -> P.SText l t $ remInd rest
-      P.SLine i rest -> P.SLine 0 $ remInd rest
-      P.SAnnPush ann rest -> remInd rest
+      P.SLine _ rest -> P.SLine 0 $ remInd rest
+      P.SAnnPush _ rest -> remInd rest
       P.SAnnPop rest -> h rest
     noIndNext :: P.SimpleDocStream Ann -> Bool
     noIndNext = \case

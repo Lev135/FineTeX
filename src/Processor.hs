@@ -10,15 +10,12 @@ where
 import Control.Monad.Writer (Writer, tell)
 import Data.Bifunctor (Bifunctor (first))
 import Data.Char (isAlphaNum, isAscii)
-import Data.Map (Map)
 import qualified Data.Map as M
 import Data.Text (Text)
 import qualified Data.Text as T
 import Data.Text.Lazy (fromStrict, toStrict)
 import Generator
-  ( ArgV (..),
-    Argument (Argument, name),
-    Command (val),
+  ( Command (val),
     Definitions (Definitions, mathCmds),
     DocElement (..),
     Environment (Environment, innerMath),
@@ -77,11 +74,6 @@ processDoc Definitions {mathCmds} = mapM $ processDocElement tries False
       Tries
         { mathCmdsTrie = mapToTrie . M.map ((<> " ") . val) . M.mapKeys text'fromText $ mathCmds
         }
-
-replaceArgs :: [Argument] -> [ArgV] -> Text -> Text
-replaceArgs args argvs = foldr (.) id (zipWith h args argvs)
-  where
-    h Argument {name} (ArgVString s) = T.replace ("$" <> name) s
 
 processDocElement :: Tries -> Bool -> DocElement -> ErrorM DocElement
 processDocElement tries math (DocParagraph els) =

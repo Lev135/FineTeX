@@ -6,26 +6,16 @@ module Printer
   )
 where
 
-import Data.Bifunctor (Bifunctor (second))
-import Data.Char (isAlphaNum, isAscii)
-import Data.List (intersperse)
-import Data.Map (Map)
-import qualified Data.Map as M
 import Data.Maybe (catMaybes, fromMaybe)
 import Data.Text (Text)
 import qualified Data.Text as T
-import Data.Text.Lazy (fromStrict, toStrict)
-import Data.Void (Void)
 import Generator
   ( ArgV (..),
     Argument (Argument, name),
-    Command (val),
-    Definitions (Definitions, mathCmds),
     DocElement (..),
     Environment (..),
     ParEl (..),
-    Pos,
-    Pref (Pref, begin, end, innerMath, pref, sep),
+    Pref (Pref, begin, end, pref, sep),
     VerbMode (NoVerb, VerbIndent),
   )
 import Prettyprinter (pretty)
@@ -70,12 +60,12 @@ surround PrintOpts {tabSize} _ begin end txt = P.vsep $ catMaybes [pretty <$> be
 texDocElement :: PrintOpts -> DocElement -> Doc
 texDocElement _ (DocParagraph els) =
   P.fillSep $ map (P.hcat . map texParEl) els
-texDocElement opts (DocEnvironment Environment {begin, end, args, innerMath, innerVerb} argvs els) =
+texDocElement opts (DocEnvironment Environment {begin, end, args, innerVerb} argvs els) =
   surround opts innerVerb (repl <$> begin) (repl <$> end) $
     texDocImpl opts els
   where
     repl = replaceArgs args argvs
-texDocElement opts@PrintOpts {prefTabMode, tabSize} (DocPrefGroup Pref {begin, end, pref, sep, innerMath} els) =
+texDocElement opts@PrintOpts {prefTabMode, tabSize} (DocPrefGroup Pref {begin, end, pref, sep} els) =
   surround opts NoVerb begin end body
   where
     sep' = fromMaybe T.empty sep
@@ -90,7 +80,7 @@ texDocElement opts@PrintOpts {prefTabMode, tabSize} (DocPrefGroup Pref {begin, e
       NormalTab -> P.hang tabSize . (pretty pref' <>)
       ColumnTab -> (pretty pref' <>) . P.align
 texDocElement _ DocEmptyLine = ""
-texDocElement _ (DocVerb noInd txts) = P.vsep $ pretty <$> txts
+texDocElement _ (DocVerb _ txts) = P.vsep $ pretty <$> txts
 
 texParEl :: ParEl -> Doc
 texParEl (ParText t) = P.fillSep $ pretty . fst <$> t

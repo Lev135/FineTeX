@@ -13,16 +13,14 @@ module OptParser
 where
 
 import Control.Applicative
-  ( Alternative (empty, many, (<|>)),
+  ( Alternative (empty, (<|>)),
     optional,
   )
 import Control.Monad (void)
 import Control.Monad.Except (MonadError (throwError))
 import Control.Monad.Fail (MonadFail (fail))
 import Control.Monad.State (StateT (StateT, runStateT))
-import Control.Monad.Trans (MonadTrans (lift))
-import Data.Bifunctor (Bifunctor (first, second))
-import Data.Char (isSpace)
+import Data.Bifunctor (Bifunctor (first))
 import Data.Either.Extra (maybeToEither)
 import Data.List (intercalate)
 import Data.List.NonEmpty (fromList)
@@ -33,21 +31,15 @@ import qualified Data.Text as T
 import Data.Void (Void)
 import Text.Megaparsec
   ( ErrorItem (Label),
-    MonadParsec (eof, lookAhead, parseError, takeWhileP),
+    MonadParsec (eof, lookAhead, parseError),
     ParseError (TrivialError),
-    ParseErrorBundle (ParseErrorBundle, bundlePosState),
+    ParseErrorBundle (ParseErrorBundle),
     Parsec,
-    PosState (pstateOffset, pstateSourcePos),
-    SourcePos,
-    errorBundlePretty,
     getOffset,
-    getSourcePos,
     manyTill,
     parse,
-    region,
   )
-import Text.Megaparsec.Char (eol, string)
-import Utils (eitherFail)
+import Text.Megaparsec.Char (eol)
 import Prelude hiding (fail)
 
 type Parser = Parsec Void Text
@@ -146,9 +138,9 @@ toParsec optNameP optArgsConsumer optP = do
       where
         optsStr = intercalate ", " opts
     mkErr (NotFoundOption name) = fail $ "Option not found: " <> T.unpack name
-    mkErr (ArgParsingError n OptVal {offset} e) = parseError (h e offset)
+    mkErr (ArgParsingError _ OptVal {offset} e) = parseError (h e offset)
       where
-        h (ParseErrorBundle es s) offset = incOffset offset $ NE.head es
+        h (ParseErrorBundle es _) offset = incOffset offset $ NE.head es
 
     incOffset pos (TrivialError p a b) = TrivialError (p + pos) a b
     incOffset _ _ = undefined
