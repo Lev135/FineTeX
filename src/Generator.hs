@@ -1,4 +1,19 @@
-module Generator where
+module Generator
+  ( Pos,
+    Parser,
+    readDoc,
+    Definitions (..),
+    DocElement (..),
+    Environment (..),
+    ParEl (..),
+    ParWord,
+    Pref (..),
+    ArgV (..),
+    Argument (..),
+    VerbMode (..),
+    Command (..),
+  )
+where
 
 import Control.Applicative (Alternative (empty, many, some, (<|>)))
 import Control.Monad (replicateM_, unless, void)
@@ -406,12 +421,6 @@ pPrefLineEnvironment defs@Definitions {prefs} = do
 
 pParagraph :: Definitions -> Parser DocElement
 pParagraph _ = DocParagraph <$> block pParLine
-
-words' :: Text -> [Text]
-words' t = h (T.head t) <> T.words t <> h (T.last t)
-  where
-    h ' ' = [T.empty]
-    h _ = []
 
 pParLine :: Parser [ParEl]
 pParLine = notFollowedBy (string "@") *> some (pForm <|> pText <|> pEmptyText) <* sc <* eol
