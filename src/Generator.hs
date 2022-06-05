@@ -3,7 +3,7 @@ module Generator where
 import Prelude hiding (readFile, fail)
 import Utils ( sepBy_, failMsg, (.:), withError, eitherFail, listSepBy_ )
 import OptParser ( OptParser, (<||>), (<??>), mkOptP, toParsec, flagOpt, labelOpt )
-import Text.Megaparsec(Parsec, MonadParsec (takeWhileP, label, takeWhile1P, try, notFollowedBy, lookAhead, eof, getParserState), SourcePos, getSourcePos, sepBy1, sepBy, unPos, (<?>), choice, optional, parse, errorBundlePretty, mkPos, satisfy, manyTill, option, anySingle, someTill, setParserState, unexpected, ErrorItem (Label), manyTill_)
+import Text.Megaparsec(Parsec, MonadParsec (takeWhileP, label, takeWhile1P, try, notFollowedBy, lookAhead, eof, getParserState), SourcePos, getSourcePos, sepBy1, sepBy, unPos, (<?>), choice, optional, parse, errorBundlePretty, mkPos, satisfy, manyTill, option, anySingle, someTill, setParserState, unexpected, ErrorItem (Label), manyTill_, failure, setErrorOffset, region, getOffset)
 import Text.Megaparsec.Char ( char, space1, eol, letterChar, string )
 import qualified Text.Megaparsec.Char.Lexer as L
 
@@ -24,6 +24,7 @@ import qualified Data.Map as M
 import Data.Map (Map)
 import Text.Megaparsec.Debug (dbg)
 import Data.List.NonEmpty (fromList)
+import qualified Data.Set as S
 
 -- Primitives
 
@@ -152,6 +153,11 @@ inEnvironment :: Text -> Maybe el -> ([el] -> a) -> Parser el -> Parser a
 inEnvironment name emptyEl f
     = inArgsEnvironment name emptyEl (return ()) (const f)
 
+parseMapEl :: (Ord k, Show k) => Map k a -> String -> Parser k -> Parser a
+parseMapEl m kType pk = do
+    reg <- region . setErrorOffset <$> getOffset
+    k <- pk
+    reg $ M.lookup k m `failMsg` "Undefined " <> kType <> " " <> show k
 
 -- Definition block
 
@@ -164,6 +170,13 @@ data Argument = Argument {
             name  :: ArgName
         }
     deriving Show
+
+prettyArg :: Argument -> String
+prettyArg Argument{atype, name} = "(" <> nameS <> " : " <> typeS <> ")"
+    where
+        nameS = T.unpack name
+        typeS = case atype of
+            ArgString -> "String"
 
 newtype ArgV = ArgVString Text
     deriving Show
@@ -207,8 +220,7 @@ pDefinitionBlock = skipImps *> scn *> (fromMaybe [] <$> optional pDefs)
         pDef  = map DefE  <$> pEnvsDef
             <|> map DefMC <$> pMathCmdsDef
             <|> map DefP  <$> pPrefDef
-        skipImps = inArgsEnvironment "Import" Nothing pStringLiteralL (const $ const ()) (return ())
-             `sepBy` try (lookAhead (scn *> atLexeme "Import"))
+        skipImps = many $ inArgsEnvironment "Import" Nothing pStringLiteralL (\_ _ -> ()) (return ()) <* scn
 
 pMathCmdsDef :: Parser [Command]
 pMathCmdsDef = inEnvironment "MathCommands" Nothing id $ do
@@ -232,7 +244,6 @@ pDefArgs = many . label "argument `(<name> : <type>)`" $ do
     return Argument{name, atype}
 
 
--- option (Nothing, Nothing) $    -- лишнее, вроде бы
 pBeginEndOpt :: OptParser (Maybe Text, Maybe Text)
 pBeginEndOpt = option (Nothing, Nothing) $ texBEP <||> simpleBEP <??> ["@TexBeginEnd", "@Begin @End"]
     where
@@ -346,12 +357,11 @@ pElement enPref defs = choice $
 
 pPrefLineEnvironment :: Definitions -> Parser DocElement
 pPrefLineEnvironment defs@Definitions{prefs} = do
-    s <- getParserState
-    (name, ind)  <- (,) <$> try (pPrefix <* string " ") <*> indentLevel
-    pref@Pref{insidePref}  <- M.lookup name prefs `failMsg` "Unexpected prefix: " ++ unpack name
-    setParserState s
-    DocPrefGroup pref <$> block (try (string $ name <> " ") *> pElements insidePref IndGEQ ind defs)
-
+    ind <- indentLevel
+    pref@Pref{insidePref, name}  <- lookAhead 
+        $ parseMapEl prefs "prefix" (try $ pPrefix <* sp)
+    DocPrefGroup pref <$> block (try (string name <* sp) *> pElements insidePref IndGT ind defs)
+        where sp = string " " <|> eol
 pParagraph :: Definitions -> Parser DocElement
 pParagraph defs = do
     ind <- indentLevel
@@ -378,7 +388,7 @@ pParLine = notFollowedBy (string "@") *> some (pForm <|> pText <|> pEmptyText) <
             try $ lookAhead (sc *> notFollowedBy eol)
             pos <- getSourcePos
             some sp
-            return $ ParText $ h pos (Just ' ') 
+            return $ ParText $ h pos (Just ' ')
         pText = label "Paragraph text" $ do
             try $ lookAhead (many sp *> satisfy smbl)
             bPos <- getSourcePos
@@ -402,8 +412,9 @@ pParLine = notFollowedBy (string "@") *> some (pForm <|> pText <|> pEmptyText) <
             return $ ParFormula words
         smbl = (`notElem` ['`', '\r', '\n', '%', ' '])
 
-pArgV :: ArgType -> Parser ArgV
-pArgV ArgString = ArgVString <$> pStringLiteralL
+pArgV :: Argument -> Parser ArgV
+pArgV arg = label (prettyArg arg) $ case atype arg of
+    ArgString -> ArgVString <$> pStringLiteralL
 
 pVerb :: Bool -> Int -> Parser DocElement
 pVerb verbInd ind = DocVerb verbInd <$> do
@@ -425,10 +436,9 @@ pVerb verbInd ind = DocVerb verbInd <$> do
 pEnvironment :: Definitions -> Parser DocElement
 pEnvironment defs@Definitions{envs} = do
     ind <- indentLevel
-    name <- string "@" *> pIdentifierL
-    env@Environment{innerVerb, insidePref}
-        <- M.lookup name envs `failMsg` ("Undefined environment " ++ show name)
-    args <- mapM pArgV (atype <$> args env)
+    env@Environment{innerVerb, insidePref} <- 
+        parseMapEl envs "environment" (string "@" *> pIdentifierL)
+    args <- mapM pArgV $ args env
     sc <* eol
     DocEnvironment env args <$>
         case innerVerb of
