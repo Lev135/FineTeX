@@ -53,6 +53,7 @@ import Text.Megaparsec
     sepBy,
     setErrorOffset,
     setParserState,
+    someTill,
     unPos,
     unexpected,
     (<?>),
@@ -423,7 +424,7 @@ pParagraph :: Definitions -> Parser DocElement
 pParagraph _ = DocParagraph <$> block pParLine
 
 pParLine :: Parser [ParEl]
-pParLine = notFollowedBy (string "@") *> some (pForm <|> pText <|> pEmptyText) <* sc <* eol
+pParLine = notFollowedBy (string "@") *> someTill (pForm <|> pText <|> pEmptyText) (try $ sc <* eol)
   where
     word :: Parser ParWord
     word = do
@@ -434,10 +435,9 @@ pParLine = notFollowedBy (string "@") *> some (pForm <|> pText <|> pEmptyText) <
     sp :: Parser Char
     sp = char ' '
     pEmptyText = do
-      try $ lookAhead (sc *> notFollowedBy eol)
       pos <- getSourcePos
       some sp
-      return $ ParText $ h pos (Just ' ')
+      return $ ParText $ [(" ", (pos, pos))]
     pText = label "Paragraph text" $ do
       try $ lookAhead (many sp *> satisfy smbl)
       bPos <- getSourcePos
