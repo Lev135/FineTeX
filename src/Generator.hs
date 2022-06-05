@@ -48,9 +48,9 @@ import Text.Megaparsec
     option,
     optional,
     parse,
-    region,
     satisfy,
     sepBy,
+    sepBy1,
     setErrorOffset,
     setParserState,
     someTill,
@@ -58,6 +58,7 @@ import Text.Megaparsec
     unexpected,
     (<?>),
   )
+import qualified Text.Megaparsec as Megaparsec
 import Text.Megaparsec.Char (char, eol, space1, string)
 import qualified Text.Megaparsec.Char.Lexer as L
 import Utils (failMsg, listSepBy_, sepBy_, withError, (.:))
@@ -69,44 +70,54 @@ type Parser = Parsec Void Text
 
 type Pos = (SourcePos, SourcePos)
 
+-- | parse space or tab symbol
 lineSpace :: Parser ()
 lineSpace = void $ char ' ' <|> char '\t'
 
+-- | parse line comment starting with '%' \\
+--   comment can continue at the next line, if it starts with '%' too
 lineComment :: Parser ()
-lineComment = do
-  p
-  void . many . try $ eol *> many lineSpace *> p
+lineComment = void $ p `sepBy1` sep
   where
     p = char '%' *> manyTill anySingle (lookAhead (void eol) <|> eof)
+    sep = try (eol *> many lineSpace *> lookAhead (char '%'))
 
+-- | line spaces or comments \\
+--   'eol' after comment will be not consumed
 sc :: Parser ()
 sc = L.space lineSpace lineComment empty
 
+-- | line spaces, comments or 'eol'
 scn :: Parser ()
 scn = L.space space1 lineComment empty
 
+-- | Lexeme with line spaces or comments after it \\
+--   'eol' after comment will be not consumed
 lexeme :: Parser a -> Parser a
 lexeme = L.lexeme sc
 
-indentLevel :: Parser Int
-indentLevel = (\p -> unPos p - 1) <$> L.indentLevel
-
+-- | String with spaces or comments after it
 strLexeme :: Text -> Parser Text
 strLexeme = lexeme . string
 
+-- | String lexeme with `@` before it
 atLexeme :: Text -> Parser Text
 atLexeme = strLexeme . ("@" <>)
 
-pStringBetween :: Char -> Parser Text
-pStringBetween bCh = do
-  bChP
-  (str, isEol) <- manyTill_ L.charLiteral (False <$ bChP <|> True <$ lookAhead eol)
-  if isEol
-    then unexpected (Label $ fromList "end of line")
-    else return $ T.pack str
-  where
-    bChP = char bCh
+-- | Indentation of current pos, minimal 0
+indentLevel :: Parser Int
+indentLevel = (\p -> unPos p - 1) <$> L.indentLevel
 
+-- | Parse string literal between `borderCh`
+pStringBetween :: Char -> Parser Text
+pStringBetween borderCh = do
+  char borderCh
+  (str, isEol) <- manyTill_ L.charLiteral (False <$ char borderCh <|> True <$ lookAhead eol)
+  if isEol
+    then unexpected . Label . fromList $ "end of line"
+    else return $ T.pack str
+
+-- | String literal lexeme between " and ' symbols
 pStringLiteralL :: Parser Text
 pStringLiteralL =
   lexeme (choice (pStringBetween <$> ['"', '\'']))
@@ -174,13 +185,19 @@ recoverBind pa pb = do
     Nothing -> empty
     Just b -> setParserState s >> return b
 
+-- | Block of lines, parsed by `pel` with the same indentation
 block :: Parser a -> Parser [a]
 block pel = do
   ind <- indentLevel
-  some $ (indentGuard IndEQ ind >> notFollowedBy (void eol <|> eof)) `recoverBind` pel
+  some $
+    (indentGuard IndEQ ind >> notFollowedBy (void eol <|> eof))
+      `recoverBind` pel
 
-block' :: Maybe a -> Parser a -> IndentOrd -> Int -> Parser [a]
-block' eVal pel ord ind = (sep *> pel `sepBy_` sep) <|> pure []
+-- | Parse region with indentation `ord`, in relation to `ind` \\
+--   Empty lines will be replaced by `eVal` (or ignored if it is `Nothing`) \\
+--   Each line will be parsed by `pel`
+region :: Maybe a -> Parser a -> IndentOrd -> Int -> Parser [a]
+region eVal pel ord ind = (sep *> pel `sepBy_` sep) <|> pure []
   where
     sep = checkIndent *> sc *> ((*> eVal) <$> optional eol) <* scn
     checkIndent =
@@ -193,7 +210,7 @@ inArgsEnvironment name emptyEl pargs f pel =
     ind <- indentLevel
     atLexeme name
     args <- sc *> pargs <* sc <* eol <* sc
-    f args <$> block' emptyEl pel IndGT ind
+    f args <$> region emptyEl pel IndGT ind
 
 inEnvironment :: Text -> Maybe el -> ([el] -> a) -> Parser el -> Parser a
 inEnvironment name emptyEl f =
@@ -201,7 +218,7 @@ inEnvironment name emptyEl f =
 
 parseMapEl :: (Ord k, Show k) => Map k a -> String -> Parser k -> Parser a
 parseMapEl m kType pk = do
-  reg <- region . setErrorOffset <$> getOffset
+  reg <- Megaparsec.region . setErrorOffset <$> getOffset
   k <- pk
   reg $ M.lookup k m `failMsg` "Undefined " <> kType <> " " <> show k
 
@@ -400,7 +417,7 @@ pDocument :: Definitions -> Parser [DocElement]
 pDocument defs = scn *> pElements True IndGEQ 0 defs <* scn
 
 pElements :: Bool -> IndentOrd -> Int -> Definitions -> Parser [DocElement]
-pElements enPref ord ind defs = block' (Just DocEmptyLine) (pElement enPref defs) ord ind
+pElements enPref ord ind defs = region (Just DocEmptyLine) (pElement enPref defs) ord ind
 
 pElement :: Bool -> Definitions -> Parser DocElement
 pElement enPref defs =
