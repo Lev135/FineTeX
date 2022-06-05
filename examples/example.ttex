@@ -1,4 +1,4 @@
-@Import "examples/std.htex"
+@Import "std.htex"
 
 @Define
   @MathCommands

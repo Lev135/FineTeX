@@ -77,6 +77,7 @@ executable texgen
                        containers            >= 0.6.5.1,
                        text-replace          >= 0.1.0.2,
                        optparse-applicative  >= 0.17.0,
+                       filepath              >= 1.4.2.2
   if os(windows)
     build-depends:
                        Win32
@@ -93,4 +94,7 @@ executable texgen
                        TupleSections
                        LambdaCase
                        FlexibleContexts
-
+  ghc-options:
+    -Wall
+    -Wno-name-shadowing
+    -Wno-unused-do-bind

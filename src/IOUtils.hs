@@ -1,22 +1,33 @@
-{-# LANGUAGE ForeignFunctionInterface #-}
 {-# LANGUAGE CPP #-}
+{-# LANGUAGE ForeignFunctionInterface #-}
 {-# LANGUAGE NoImplicitPrelude #-}
-{-# OPTIONS_GHC -Wno-overflowed-literals #-}
+{-# OPTIONS_GHC -Wno-all #-}
 
-module IOUtils (
-  IOUtils.interact,
-  IOUtils.putChar, IOUtils.putStr, IOUtils.putStrLn, IOUtils.print,
-  IOUtils.getChar, IOUtils.getLine, IOUtils.getContents, IOUtils.readIO,
-  IOUtils.readLn,
-  ePutChar, ePutStr, ePutStrLn, ePrint,
-  trace, traceIO
-  ) where
+module IOUtils
+  ( IOUtils.interact,
+    IOUtils.putChar,
+    IOUtils.putStr,
+    IOUtils.putStrLn,
+    IOUtils.print,
+    IOUtils.getChar,
+    IOUtils.getLine,
+    IOUtils.getContents,
+    IOUtils.readIO,
+    IOUtils.readLn,
+    ePutChar,
+    ePutStr,
+    ePutStrLn,
+    ePrint,
+    trace,
+    traceIO,
+  )
+where
 
-import System.IO.Unsafe(unsafePerformIO)
-import Prelude hiding (getContents, putStr, putStrLn)
-import qualified System.IO (getContents)
-import System.IO hiding (getContents, putStr, putStrLn)
 import Data.Char (ord)
+import System.IO hiding (getContents, putStr, putStrLn)
+import qualified System.IO (getContents)
+import System.IO.Unsafe (unsafePerformIO)
+import Prelude hiding (getContents, putStr, putStrLn)
 
 #ifdef mingw32_HOST_OS
 
@@ -198,8 +209,8 @@ ePrint       = System.IO.hPrint System.IO.stderr
 
 trace :: String -> a -> a
 trace string expr = unsafePerformIO $ do
-    traceIO string
-    return expr
+  traceIO string
+  return expr
 
 traceIO :: String -> IO ()
 traceIO = ePutStrLn
