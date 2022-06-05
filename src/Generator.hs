@@ -32,6 +32,7 @@ import qualified Data.Text as T
 import Data.Text.Encoding (decodeUtf8)
 import Data.Void (Void)
 import OptParser (OptParser, flagOpt, labelOpt, mkOptP, toParsec, (<??>), (<||>))
+import System.FilePath
 import Text.Megaparsec
   ( ErrorItem (Label),
     MonadParsec (eof, getParserState, label, lookAhead, notFollowedBy, takeWhile1P, takeWhileP, try),
@@ -515,6 +516,7 @@ pEnvironment defs@Definitions {envs} = do
 
 -- File readers and parsers
 
+-- | Parse file with given definitions from imported files
 pFile :: Definitions -> Parser (Definitions, [DocElement])
 pFile impDefs = do
   defs <- processDefs <$> pDefinitionBlock
@@ -522,14 +524,17 @@ pFile impDefs = do
   doc <- pDocument defs'
   return (defs', doc)
 
-pImportFiles :: Parser [FilePath]
-pImportFiles =
+-- | Parse import filenames
+pImportFilenames :: Parser [FilePath]
+pImportFilenames =
   L.nonIndented scn $
     try (atLexeme "Import" *> fmap unpack pStringLiteralL `sepBy` try (eol *> scn *> atLexeme "Import"))
       <|> return []
 
-getImports :: FilePath -> Text -> Either String [FilePath]
-getImports = first (("get imports error: " <>) . errorBundlePretty) .: parse pImportFiles
+scanImportFilenames :: FilePath -> Text -> Either String [FilePath]
+scanImportFilenames =
+  first (("Error while reading imports: " <>) . errorBundlePretty)
+    .: parse pImportFilenames
 
 readDoc ::
   (MonadError String m, MonadIO m, MonadCatch m) =>
@@ -540,8 +545,12 @@ readDoc fileName = do
     decodeUtf8 <$> liftIO (readFile fileName)
       `catchIOError` \e ->
         throwError ("Unable to open file '" <> fileName <> "': " <> show e)
-  impFNames <- liftEither $ getImports fileName file
-  defs <- mconcat <$> mapM ((fst . snd <$>) . withError addPrefix . readDoc) impFNames
+  impFNames <- liftEither $ scanImportFilenames fileName file
+  defs <-
+    mconcat
+      <$> mapM
+        ((fst . snd <$>) . withError addPrefix . readDoc . (dropFileName fileName <>))
+        impFNames
   case parse (pFile defs) fileName file of
     Left e -> throwError $ errorBundlePretty e
     Right res -> return (file, res)
