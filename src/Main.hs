@@ -11,10 +11,10 @@ import Data.Text (Text)
 import qualified Data.Text as T
 import Data.Text.Encoding (encodeUtf8)
 import Data.Void (Void)
-import Generator (Definitions, DocElement, Parser, readDoc)
 import qualified IOUtils
 import Options.Applicative (readerError)
 import qualified Options.Applicative as Opt
+import Parser (Definitions, DocElement, Parser, readDoc)
 import Prettyprinter
   ( LayoutOptions (..),
     PageWidth (AvailablePerLine),

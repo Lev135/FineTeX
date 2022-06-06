@@ -1,4 +1,4 @@
-module Generator
+module Parser
   ( Pos,
     Parser,
     readDoc,

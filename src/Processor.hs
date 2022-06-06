@@ -14,7 +14,7 @@ import qualified Data.Map as M
 import Data.Text (Text)
 import qualified Data.Text as T
 import Data.Text.Lazy (fromStrict, toStrict)
-import Generator
+import Parser
   ( Command (val),
     Definitions (Definitions, mathCmds),
     DocElement (..),
