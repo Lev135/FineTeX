@@ -9,7 +9,7 @@ where
 import Data.Maybe (catMaybes, fromMaybe)
 import Data.Text (Text)
 import qualified Data.Text as T
-import Generator
+import Parser
   ( ArgV (..),
     Argument (Argument, name),
     DocElement (..),
