@@ -140,7 +140,7 @@ pPrefix =
     <?> "Prefix"
   where
     fstSmbls :: [Char]
-    fstSmbls = "!#$%^*-+,./|\\><[]~"
+    fstSmbls = "!#$%^*-+,./|><[]~"
     chPred ch = not $ isSpace ch || ch == '%'
 
 pPrefixL :: Parser Text
