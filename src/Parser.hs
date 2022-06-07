@@ -22,7 +22,7 @@ import Control.Monad.Except (MonadError (throwError), MonadIO (liftIO), liftEith
 import Control.Monad.Fail (MonadFail (fail))
 import Data.Bifunctor (Bifunctor (first))
 import Data.ByteString (readFile)
-import Data.Char (isAlphaNum, isLetter, isSpace)
+import Data.Char (isLetter, isSpace)
 import Data.List.NonEmpty (fromList)
 import Data.Map (Map)
 import qualified Data.Map as M
@@ -32,7 +32,7 @@ import qualified Data.Text as T
 import Data.Text.Encoding (decodeUtf8)
 import Data.Void (Void)
 import OptParser (OptParser, flagOpt, labelOpt, mkOptP, toParsec, (<??>), (<||>))
-import System.FilePath
+import System.FilePath (dropFileName)
 import Text.Megaparsec
   ( ErrorItem (Label),
     MonadParsec (eof, getParserState, label, lookAhead, notFollowedBy, takeWhile1P, takeWhileP, try),
@@ -141,7 +141,7 @@ pPrefix =
   where
     fstSmbls :: [Char]
     fstSmbls = "!#$%^*-+,./|\\><[]~"
-    chPred ch = not $ isSpace ch || isAlphaNum ch || ch == '%'
+    chPred ch = not $ isSpace ch || ch == '%'
 
 pPrefixL :: Parser Text
 pPrefixL = lexeme pPrefix
