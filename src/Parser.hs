@@ -263,7 +263,7 @@ data Pref = Pref
   { name :: Text,
     begin, end :: Maybe Text,
     args :: [Argument],
-    pref, sep :: Maybe Text,
+    pref, suf, sep :: Maybe Text,
     innerMath :: Bool,
     insidePref :: Bool,
     grouping :: Bool,
@@ -360,20 +360,19 @@ pPrefDef = inEnvironment "Prefs" Nothing id $ do
   name <- pPrefixL
   args <- pDefArgs
   strLexeme "="
-  ((begin, end), pref, sep, innerMath, insidePref, grouping, oneLine) <-
+  ((begin, end), pref, suf, sep, innerMath, insidePref, grouping, oneLine) <-
     pOpt $ do
       beginEnd <- pBeginEndOpt
       pref <- optional (mkOptP "Pref" pStringLiteralL)
+      suf <- optional (mkOptP "Suf" pStringLiteralL)
       sep <- optional (mkOptP "Sep" pStringLiteralL)
       math <- flagOpt "Math"
       insidePref <- not <$> flagOpt "NoPrefInside"
       grouping <- not <$> flagOpt "NoGroup"
       oneLine <- flagOpt "OneLine"
-      -- let grouping = False
-      --     oneLine = False
-      return (beginEnd, pref, sep, math, insidePref, grouping, oneLine)
+      return (beginEnd, pref, suf, sep, math, insidePref, grouping, oneLine)
   eol
-  return Pref {name, begin, end, args, pref, sep, innerMath, insidePref, grouping, oneLine}
+  return Pref {name, begin, end, args, pref, suf, sep, innerMath, insidePref, grouping, oneLine}
 
 -- Processing definitions
 

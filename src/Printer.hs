@@ -76,7 +76,7 @@ texDocElement opts (DocEnvironment Environment {begin, end, args, innerVerb} arg
     texDocImpl opts els
   where
     repl = replaceArgs args argvs
-texDocElement opts@PrintOpts {prefTabMode, tabSize} (DocPrefGroup Pref {begin, end, args, pref, sep, oneLine} els) =
+texDocElement opts@PrintOpts {prefTabMode, tabSize} (DocPrefGroup Pref {begin, end, args, pref, suf, sep, oneLine} els) =
   surround opts NoVerb oneLine begin end body
   where
     sep' = fromMaybe T.empty sep
@@ -86,11 +86,12 @@ texDocElement opts@PrintOpts {prefTabMode, tabSize} (DocPrefGroup Pref {begin, e
       | otherwise = P.vcat
     prettyEl :: ([ArgV], [DocElement]) -> Doc
     prettyEl (argvs, els) = case prefTabMode of
-      NoTab -> pref'' <> els'
-      NormalTab -> P.hang tabSize $ pref'' <> els'
-      ColumnTab -> pref'' <> P.align els'
+      NoTab -> pref' <> els' <> suf'
+      NormalTab -> P.hang tabSize $ pref' <> els' <> suf'
+      ColumnTab -> pref' <> P.align els' <> suf'
       where
-        pref'' = pretty $ replaceArgs args argvs $ maybe T.empty (<> " ") pref
+        pref' = pretty $ replaceArgs args argvs $ maybe T.empty (<> " ") pref
+        suf' = pretty $ replaceArgs args argvs $ maybe T.empty (" " <>) suf
         els' = texDocImpl opts els
 texDocElement _ DocEmptyLine = ""
 texDocElement _ (DocVerb _ txts) = P.vsep $ pretty <$> txts
