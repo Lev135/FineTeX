@@ -47,6 +47,7 @@ replaceArgs :: [Argument] -> [ArgV] -> Text -> Text
 replaceArgs args argvs = foldr (.) id (zipWith h args argvs)
   where
     h Argument {name} (ArgVString s) = T.replace ("$" <> name) s
+    h Argument {name} (ArgVMath ws) = T.replace ("$" <> name) . T.intercalate " " . map fst $ ws
 
 surround :: P.Pretty a => PrintOpts -> VerbMode -> Bool -> Maybe a -> Maybe a -> Doc -> Doc
 surround PrintOpts {tabSize} verbMode oneLine begin end body =

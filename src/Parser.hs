@@ -8,6 +8,7 @@ module Parser
     ParEl (..),
     ParWord,
     Pref (..),
+    ArgType (..),
     ArgV (..),
     Argument (..),
     VerbMode (..),
@@ -26,7 +27,7 @@ import Data.Char (isLetter, isSpace)
 import Data.List.NonEmpty (fromList)
 import Data.Map (Map)
 import qualified Data.Map as M
-import Data.Maybe (fromMaybe)
+import Data.Maybe (fromMaybe, maybeToList)
 import Data.Text (Text, unpack)
 import qualified Data.Text as T
 import Data.Text.Encoding (decodeUtf8)
@@ -225,7 +226,7 @@ parseMapEl m kType pk = do
 
 -- Definition block
 
-data ArgType = ArgString
+data ArgType = ArgString | ArgMath
   deriving (Show)
 
 type ArgName = Text
@@ -242,8 +243,9 @@ prettyArg Argument {atype, name} = "(" <> nameS <> " : " <> typeS <> ")"
     nameS = T.unpack name
     typeS = case atype of
       ArgString -> "String"
+      ArgMath -> "Math"
 
-newtype ArgV = ArgVString Text
+data ArgV = ArgVString Text | ArgVMath [ParWord]
   deriving (Show)
 
 data VerbMode = NoVerb | Verb | VerbIndent
@@ -304,7 +306,8 @@ pMathCmdsDef = inEnvironment "MathCommands" Nothing id $ do
 pType :: Parser ArgType
 pType =
   ArgString <$ strLexeme "String"
-    <?> "argument type `String`"
+    <|> ArgMath <$ strLexeme "Math"
+      <?> "argument type `String` | `Math`"
 
 pDefArgs :: Parser [Argument]
 pDefArgs = many . label "argument `(<name> : <type>)`" $ do
@@ -455,47 +458,47 @@ pPrefLineEnvironment defs@Definitions {prefs} = do
 pParagraph :: Definitions -> Parser DocElement
 pParagraph _ = DocParagraph <$> block pParLine
 
+smbl :: Char -> Bool
+smbl = (`notElem` ['`', '\r', '\n', '%', ' '])
+
+pWord :: Parser ParWord
+pWord = do
+  begin <- getSourcePos
+  val <- takeWhile1P Nothing smbl
+  end <- getSourcePos
+  return (val, (begin, end))
+
+pForm :: Parser [ParWord]
+pForm =
+  char '`' *> sc *> many (pWord <* sc) <* char '`'
+    <?> "Inline formula"
+
 pParLine :: Parser [ParEl]
-pParLine = notFollowedBy (string "@") *> someTill (pForm <|> pText <|> pEmptyText) (try $ sc <* eol)
+pParLine = notFollowedBy (string "@") *> someTill pEl (try $ sc <* eol)
   where
-    word :: Parser ParWord
-    word = do
-      begin <- getSourcePos
-      val <- takeWhile1P Nothing smbl
-      end <- getSourcePos
-      return (val, (begin, end))
-    sp :: Parser Char
-    sp = char ' '
-    pEmptyText = do
-      pos <- getSourcePos
-      some sp
-      return $ ParText $ [(" ", (pos, pos))]
+    pEl =
+      ParFormula <$> pForm
+        <|> ParText <$> pText
+        <|> ParText <$> pEmptyText
+    sp = getSourcePos <* char ' '
+    pEmptyText = (\pos -> [(" ", (pos, pos))]) <$> getSourcePos <* some sp
     pText = label "Paragraph text" $ do
       try $ lookAhead (many sp *> satisfy smbl)
-      bPos <- getSourcePos
-      bSpace <- optional sp
+      bSp <- maybeToList <$> optional sp
       words <- some $ do
         try $ lookAhead (many sp *> satisfy smbl)
-        many sp *> word
-      ePos <- getSourcePos
-      eSpace <- optional . try $ do
+        many sp *> pWord
+      eSp <- fmap maybeToList . optional . try $ do
         lookAhead (sc *> notFollowedBy eol)
         sp
       many sp
-      return $ ParText $ h bPos bSpace <> words <> h ePos eSpace
-    h p (Just _) = [(T.empty, (p, p))]
-    h _ Nothing = []
-    pForm = label "Inline formula" $ do
-      char '`'
-      many sp
-      words <- many (word <* many sp)
-      char '`'
-      return $ ParFormula words
-    smbl = (`notElem` ['`', '\r', '\n', '%', ' '])
+      return $ map h bSp <> words <> map h eSp
+    h p = (T.empty, (p, p))
 
 pArgV :: Argument -> Parser ArgV
 pArgV arg = label (prettyArg arg) $ case atype arg of
   ArgString -> ArgVString <$> pStringLiteralL
+  ArgMath -> ArgVMath <$> pForm
 
 pVerb :: Bool -> Int -> Parser DocElement
 pVerb verbInd ind =

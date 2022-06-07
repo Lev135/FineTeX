@@ -2,20 +2,10 @@ module Utils where
 
 import Control.Applicative (Alternative (many, (<|>)))
 import Control.Monad.Except (MonadError (catchError, throwError))
-import Data.Bifunctor (Bifunctor (second))
 import Data.Maybe (maybeToList)
 
 (.:) :: Functor f => (b -> c) -> (a -> f b) -> a -> f c
 f .: g = fmap f . g
-
-sequenceSecond :: Functor m => (a, m b) -> m (a, b)
-sequenceSecond (a, mb) = (a,) <$> mb
-
-mapSecond :: (Traversable t, Bifunctor p) => (b -> c) -> t (p a b) -> t (p a c)
-mapSecond f = fmap (second f)
-
-mapSecondM :: (Monad m, Traversable t) => (b -> m c) -> t (a, b) -> m (t (a, c))
-mapSecondM f = mapM sequenceSecond . mapSecond f
 
 -- | Convert a 'Maybe' value to a value in any monad
 failMsg :: MonadFail m => Maybe a -> String -> m a

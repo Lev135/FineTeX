@@ -7,6 +7,7 @@ module Processor
   )
 where
 
+import Control.Monad (zipWithM)
 import Control.Monad.Writer (Writer, tell)
 import Data.Bifunctor (Bifunctor (first))
 import Data.Char (isAlphaNum, isAscii)
@@ -15,18 +16,20 @@ import Data.Text (Text)
 import qualified Data.Text as T
 import Data.Text.Lazy (fromStrict, toStrict)
 import Parser
-  ( Command (val),
-    Definitions (Definitions, mathCmds),
+  ( ArgType (..),
+    ArgV (ArgVMath),
+    Argument (..),
+    Command (..),
+    Definitions (..),
     DocElement (..),
-    Environment (Environment, innerMath),
+    Environment (..),
     ParEl (..),
     ParWord,
     Pos,
-    Pref (Pref, innerMath),
+    Pref (..),
   )
 import Text.Megaparsec (SourcePos (..), unPos)
 import Text.Replace (Trie, mapToTrie, replaceWithTrie, text'fromText)
-import Utils (mapSecondM)
 
 newtype Tries = Tries
   { mathCmdsTrie :: Trie
@@ -76,17 +79,30 @@ processDoc Definitions {mathCmds} = mapM $ processDocElement tries False
         { mathCmdsTrie = mapToTrie . M.map ((<> " ") . val) . M.mapKeys text'fromText $ mathCmds
         }
 
+processMathArgs :: Tries -> [Argument] -> [ArgV] -> ErrorM [ArgV]
+processMathArgs tries = zipWithM h
+  where
+    h :: Argument -> ArgV -> ErrorM ArgV
+    h arg argv = case atype arg of
+      ArgMath -> case argv of
+        ArgVMath ws -> ArgVMath <$> sequence (checkAscii . first (texMath tries) <$> ws)
+        _ -> error "Arg type and value mismatch"
+      ArgString -> return argv
+
 processDocElement :: Tries -> Bool -> DocElement -> ErrorM DocElement
 processDocElement tries math (DocParagraph els) =
   DocParagraph
     <$> (mapM . mapM) (processParEl tries math) els
-processDocElement tries math (DocEnvironment env@Environment {innerMath} argvs els) =
-  DocEnvironment env argvs
-    <$> mapM (processDocElement tries (math || innerMath)) els
-processDocElement tries math (DocPrefGroup pref@Pref {innerMath} els) =
-  DocPrefGroup pref <$> mapSecondM f els
+processDocElement tries math (DocEnvironment env@Environment {innerMath, args} argvs els) = do
+  args' <- processMathArgs tries args argvs
+  els' <- mapM (processDocElement tries (math || innerMath)) els
+  return $ DocEnvironment env args' els'
+processDocElement tries math (DocPrefGroup pref@Pref {innerMath, args} els) = do
+  DocPrefGroup pref <$> mapM fEl els
   where
-    f = mapM $ processDocElement tries (math || innerMath)
+    fEl (argvs, body) = (,) <$> fArgs argvs <*> fBody body
+    fBody = mapM $ processDocElement tries (math || innerMath)
+    fArgs = processMathArgs tries args
 processDocElement _ _ DocEmptyLine = return DocEmptyLine
 processDocElement _ _ v@(DocVerb _ _) = return v
 
@@ -96,10 +112,10 @@ processParEl tries math el = case (math, el) of
     el <$ mapM checkAscii ws
   (False, ParFormula ws) ->
     let ws' = first (texMath tries) <$> ws
-     in ParFormula ws' <$ mapM checkAscii ws'
+     in ParFormula <$> mapM checkAscii ws'
   (True, ParText ws) ->
     let ws' = first (texMath tries) <$> ws
-     in ParText ws' <$ mapM checkAscii ws'
+     in ParText <$> mapM checkAscii ws'
   (True, ParFormula ws) -> do
     -- TODO: Make it without possible exceptions!!!!!
     let (_, (p1, _)) = head ws
@@ -110,10 +126,11 @@ processParEl tries math el = case (math, el) of
 isCyrillic :: Char -> Bool
 isCyrillic c = c >= '\x0400' && c <= '\x04FF'
 
-checkAscii :: ParWord -> ErrorM ()
-checkAscii (t, p) = case T.find (\ch -> not (isAscii ch || isCyrillic ch)) t of
-  Nothing -> return ()
-  Just c -> tell [Error (UnexpectedUnicodeSymbol c) p]
+checkAscii :: ParWord -> ErrorM ParWord
+checkAscii w@(t, p) =
+  w <$ case T.find (\ch -> not (isAscii ch || isCyrillic ch)) t of
+    Nothing -> return ()
+    Just c -> tell [Error (UnexpectedUnicodeSymbol c) p]
 
 texMath :: Tries -> Text -> Text
 texMath Tries {mathCmdsTrie} = rmSpaces . toStrict . replaceWithTrie mathCmdsTrie . fromStrict
