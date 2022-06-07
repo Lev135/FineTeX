@@ -177,5 +177,5 @@ main = processFile . defaultOutp =<< Opt.execParser opts
       | otherwise = opts
     replExt ext' filePath =
       case spanEnd (/= '.') filePath of
-        (_, []) -> filePath <> ext'
+        ([], _) -> filePath <> "." <> ext'
         (f', _) -> f' <> ext'
