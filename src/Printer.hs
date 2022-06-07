@@ -17,6 +17,7 @@ import Parser
     ParEl (..),
     Pref (Pref, begin, end, pref, sep),
     VerbMode (NoVerb, VerbIndent),
+    oneLine,
   )
 import Prettyprinter (pretty)
 import qualified Prettyprinter as P
@@ -47,34 +48,48 @@ replaceArgs args argvs = foldr (.) id (zipWith h args argvs)
   where
     h Argument {name} (ArgVString s) = T.replace ("$" <> name) s
 
-surround :: P.Pretty a => PrintOpts -> VerbMode -> Maybe a -> Maybe a -> Doc -> Doc
-surround _ VerbIndent begin end txt =
-  P.annotate NoIndent $
-    P.vsep $ catMaybes [pretty <$> begin, Just txt, pretty <$> end]
-surround PrintOpts {tabSize} _ begin end txt = P.vsep $ catMaybes [pretty <$> begin, Just $ hNest txt, pretty <$> end]
+surround :: P.Pretty a => PrintOpts -> VerbMode -> Bool -> Maybe a -> Maybe a -> Doc -> Doc
+surround PrintOpts {tabSize} verbMode oneLine begin end body =
+  annotate $
+    sep $ catMaybes [pretty <$> begin, Just $ hNest body, pretty <$> end]
   where
-    hNest = case (begin, end) of
-      (Nothing, Nothing) -> id
-      _ -> P.indent tabSize
+    isVerb = case verbMode of
+      VerbIndent -> True
+      _ -> False
+    annotate
+      | isVerb = P.annotate NoIndent
+      | otherwise = id
+    sep
+      | oneLine = P.fillSep
+      | otherwise = P.vsep
+    hNest
+      | isVerb || oneLine = id
+      | otherwise = case (begin, end) of
+        (Nothing, Nothing) -> id
+        _ -> P.indent tabSize
 
 texDocElement :: PrintOpts -> DocElement -> Doc
 texDocElement _ (DocParagraph els) =
   P.fillSep $ map (P.hcat . map texParEl) els
 texDocElement opts (DocEnvironment Environment {begin, end, args, innerVerb} argvs els) =
-  surround opts innerVerb (repl <$> begin) (repl <$> end) $
+  surround opts innerVerb False (repl <$> begin) (repl <$> end) $
     texDocImpl opts els
   where
     repl = replaceArgs args argvs
-texDocElement opts@PrintOpts {prefTabMode, tabSize} (DocPrefGroup Pref {begin, end, pref, sep} els) =
-  surround opts NoVerb begin end body
+texDocElement opts@PrintOpts {prefTabMode, tabSize} (DocPrefGroup Pref {begin, end, pref, sep, oneLine} els) =
+  surround opts NoVerb oneLine begin end body
   where
     sep' = fromMaybe T.empty sep
     pref' = maybe T.empty (<> " ") pref
     body =
-      P.vcat $
+      cat $
         P.punctuate
           (pretty sep')
           (preftab . texDocImpl opts <$> els)
+      where
+        cat
+          | oneLine = P.fillSep
+          | otherwise = P.vcat
     preftab = case prefTabMode of
       NoTab -> (pretty pref' <>)
       NormalTab -> P.hang tabSize . (pretty pref' <>)

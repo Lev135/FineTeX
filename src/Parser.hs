@@ -264,7 +264,9 @@ data Pref = Pref
     begin, end :: Maybe Text,
     pref, sep :: Maybe Text,
     innerMath :: Bool,
-    insidePref :: Bool
+    insidePref :: Bool,
+    grouping :: Bool,
+    oneLine :: Bool
   }
   deriving (Show)
 
@@ -356,16 +358,20 @@ pPrefDef :: Parser [Pref]
 pPrefDef = inEnvironment "Prefs" Nothing id $ do
   name <- pPrefixL
   strLexeme "="
-  ((begin, end), pref, sep, innerMath, insidePref) <-
+  ((begin, end), pref, sep, innerMath, insidePref, grouping, oneLine) <-
     pOpt $ do
       beginEnd <- pBeginEndOpt
       pref <- optional (mkOptP "Pref" pStringLiteralL)
       sep <- optional (mkOptP "Sep" pStringLiteralL)
       math <- flagOpt "Math"
       insidePref <- not <$> flagOpt "NoPrefInside"
-      return (beginEnd, pref, sep, math, insidePref)
+      grouping <- not <$> flagOpt "NoGroup"
+      oneLine <- flagOpt "OneLine"
+      -- let grouping = False
+      --     oneLine = False
+      return (beginEnd, pref, sep, math, insidePref, grouping, oneLine)
   eol
-  return Pref {name, begin, end, pref, sep, innerMath, insidePref}
+  return Pref {name, begin, end, pref, sep, innerMath, insidePref, grouping, oneLine}
 
 -- Processing definitions
 
@@ -431,10 +437,13 @@ pElement enPref defs =
 pPrefLineEnvironment :: Definitions -> Parser DocElement
 pPrefLineEnvironment defs@Definitions {prefs} = do
   ind <- indentLevel
-  pref@Pref {insidePref, name} <-
+  pref@Pref {insidePref, name, grouping} <-
     lookAhead $
       parseMapEl prefs "prefix" (try $ pPrefix <* sp)
-  DocPrefGroup pref <$> block (try (string name <* sp) *> pElements insidePref IndGT ind defs)
+  let pel = try (string name <* sp) *> pElements insidePref IndGT ind defs
+  if grouping
+    then DocPrefGroup pref <$> block pel
+    else DocPrefGroup pref . (: []) <$> pel
   where
     sp = string " " <|> eol
 

@@ -1,0 +1,13 @@
+@Define
+  @Prefs
+    |$  = @Begin "Begin" @NoGroup @OneLine
+    |>  = @End   "End."  @NoGroup @OneLine
+    ||$ = @Begin "Begin"          @OneLine
+
+Example:
+  |$ 1
+  |$ 2
+  |> 1
+  |> 2
+  ||$ 1
+  ||$ 2
