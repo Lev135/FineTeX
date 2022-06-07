@@ -26,6 +26,7 @@ import Parser
   )
 import Text.Megaparsec (SourcePos (..), unPos)
 import Text.Replace (Trie, mapToTrie, replaceWithTrie, text'fromText)
+import Utils (mapSecondM)
 
 newtype Tries = Tries
   { mathCmdsTrie :: Trie
@@ -83,8 +84,9 @@ processDocElement tries math (DocEnvironment env@Environment {innerMath} argvs e
   DocEnvironment env argvs
     <$> mapM (processDocElement tries (math || innerMath)) els
 processDocElement tries math (DocPrefGroup pref@Pref {innerMath} els) =
-  DocPrefGroup pref
-    <$> (mapM . mapM) (processDocElement tries (math || innerMath)) els
+  DocPrefGroup pref <$> mapSecondM f els
+  where
+    f = mapM $ processDocElement tries (math || innerMath)
 processDocElement _ _ DocEmptyLine = return DocEmptyLine
 processDocElement _ _ v@(DocVerb _ _) = return v
 

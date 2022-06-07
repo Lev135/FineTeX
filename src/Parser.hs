@@ -262,6 +262,7 @@ data Environment = Environment
 data Pref = Pref
   { name :: Text,
     begin, end :: Maybe Text,
+    args :: [Argument],
     pref, sep :: Maybe Text,
     innerMath :: Bool,
     insidePref :: Bool,
@@ -357,6 +358,7 @@ pEnvsDef = inEnvironment "Environments" Nothing id $ do
 pPrefDef :: Parser [Pref]
 pPrefDef = inEnvironment "Prefs" Nothing id $ do
   name <- pPrefixL
+  args <- pDefArgs
   strLexeme "="
   ((begin, end), pref, sep, innerMath, insidePref, grouping, oneLine) <-
     pOpt $ do
@@ -371,7 +373,7 @@ pPrefDef = inEnvironment "Prefs" Nothing id $ do
       --     oneLine = False
       return (beginEnd, pref, sep, math, insidePref, grouping, oneLine)
   eol
-  return Pref {name, begin, end, pref, sep, innerMath, insidePref, grouping, oneLine}
+  return Pref {name, begin, end, args, pref, sep, innerMath, insidePref, grouping, oneLine}
 
 -- Processing definitions
 
@@ -408,7 +410,7 @@ processDef (DefP pr@Pref {name}) =
 data DocElement
   = DocParagraph [[ParEl]]
   | DocEnvironment Environment [ArgV] [DocElement]
-  | DocPrefGroup Pref [[DocElement]]
+  | DocPrefGroup Pref [([ArgV], [DocElement])]
   | DocEmptyLine
   | DocVerb Bool [Text]
   deriving (Show)
@@ -437,10 +439,14 @@ pElement enPref defs =
 pPrefLineEnvironment :: Definitions -> Parser DocElement
 pPrefLineEnvironment defs@Definitions {prefs} = do
   ind <- indentLevel
-  pref@Pref {insidePref, name, grouping} <-
+  pref@Pref {insidePref, name, grouping, args} <-
     lookAhead $
       parseMapEl prefs "prefix" (try $ pPrefix <* sp)
-  let pel = try (string name <* sp) *> pElements insidePref IndGT ind defs
+  let pel = do
+        try (string name <* sp)
+        args <- mapM pArgV args
+        body <- pElements insidePref IndGT ind defs
+        return (args, body)
   if grouping
     then DocPrefGroup pref <$> block pel
     else DocPrefGroup pref . (: []) <$> pel
@@ -513,9 +519,9 @@ pVerb verbInd ind =
 pEnvironment :: Definitions -> Parser DocElement
 pEnvironment defs@Definitions {envs} = do
   ind <- indentLevel
-  env@Environment {innerVerb, insidePref} <-
+  env@Environment {innerVerb, insidePref, args} <-
     parseMapEl envs "environment" (string "@" *> pIdentifierL)
-  args <- mapM pArgV $ args env
+  args <- mapM pArgV args
   sc <* eol
   DocEnvironment env args
     <$> case innerVerb of

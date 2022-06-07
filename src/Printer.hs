@@ -15,7 +15,7 @@ import Parser
     DocElement (..),
     Environment (..),
     ParEl (..),
-    Pref (Pref, begin, end, pref, sep),
+    Pref (..),
     VerbMode (NoVerb, VerbIndent),
     oneLine,
   )
@@ -76,24 +76,22 @@ texDocElement opts (DocEnvironment Environment {begin, end, args, innerVerb} arg
     texDocImpl opts els
   where
     repl = replaceArgs args argvs
-texDocElement opts@PrintOpts {prefTabMode, tabSize} (DocPrefGroup Pref {begin, end, pref, sep, oneLine} els) =
+texDocElement opts@PrintOpts {prefTabMode, tabSize} (DocPrefGroup Pref {begin, end, args, pref, sep, oneLine} els) =
   surround opts NoVerb oneLine begin end body
   where
     sep' = fromMaybe T.empty sep
-    pref' = maybe T.empty (<> " ") pref
-    body =
-      cat $
-        P.punctuate
-          (pretty sep')
-          (preftab . texDocImpl opts <$> els)
+    body = cat $ P.punctuate (pretty sep') (prettyEl <$> els)
+    cat
+      | oneLine = P.fillSep
+      | otherwise = P.vcat
+    prettyEl :: ([ArgV], [DocElement]) -> Doc
+    prettyEl (argvs, els) = case prefTabMode of
+      NoTab -> pref'' <> els'
+      NormalTab -> P.hang tabSize $ pref'' <> els'
+      ColumnTab -> pref'' <> P.align els'
       where
-        cat
-          | oneLine = P.fillSep
-          | otherwise = P.vcat
-    preftab = case prefTabMode of
-      NoTab -> (pretty pref' <>)
-      NormalTab -> P.hang tabSize . (pretty pref' <>)
-      ColumnTab -> (pretty pref' <>) . P.align
+        pref'' = pretty $ replaceArgs args argvs $ maybe T.empty (<> " ") pref
+        els' = texDocImpl opts els
 texDocElement _ DocEmptyLine = ""
 texDocElement _ (DocVerb _ txts) = P.vsep $ pretty <$> txts
 
