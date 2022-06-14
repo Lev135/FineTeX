@@ -199,7 +199,7 @@ block pel = do
 --   Empty lines will be replaced by `eVal` (or ignored if it is `Nothing`) \\
 --   Each line will be parsed by `pel`
 region :: Maybe a -> Parser a -> IndentOrd -> Int -> Parser [a]
-region eVal pel ord ind = (sep *> pel `sepBy_` sep) <|> pure []
+region eVal pel ord ind = (sep *> pel `sepBy_` sep) <|> [] <$ (sc *> optional eol)
   where
     sep = checkIndent *> sc *> ((*> eVal) <$> optional eol) <* scn
     checkIndent =
@@ -425,7 +425,7 @@ data ParEl
   deriving (Show)
 
 pDocument :: Definitions -> Parser [DocElement]
-pDocument defs = scn *> pElements True IndGEQ 0 defs <* scn
+pDocument defs = scn *> pElements True IndGEQ 0 defs
 
 pElements :: Bool -> IndentOrd -> Int -> Definitions -> Parser [DocElement]
 pElements enPref ord ind defs = region (Just DocEmptyLine) (pElement enPref defs) ord ind
@@ -440,20 +440,17 @@ pElement enPref defs =
 
 pPrefLineEnvironment :: Definitions -> Parser DocElement
 pPrefLineEnvironment defs@Definitions {prefs} = do
-  ind <- indentLevel
   pref@Pref {insidePref, name, grouping, args} <-
     lookAhead $
-      parseMapEl prefs "prefix" (try $ pPrefix <* sp)
+      parseMapEl prefs "prefix" pPrefix
   let pel = do
-        try (string name <* sp)
+        ind <- indentLevel
+        string name
         args <- mapM pArgV args
         body <- pElements insidePref IndGT ind defs
         return (args, body)
-  if grouping
-    then DocPrefGroup pref <$> block pel
-    else DocPrefGroup pref . (: []) <$> pel
-  where
-    sp = string " " <|> eol
+  els <- if grouping then block pel else (: []) <$> pel
+  return $ DocPrefGroup pref els
 
 pParagraph :: Definitions -> Parser DocElement
 pParagraph _ = DocParagraph <$> block pParLine
@@ -480,20 +477,15 @@ pParLine = notFollowedBy (string "@") *> someTill pEl (try $ sc <* eol)
       ParFormula <$> pForm
         <|> ParText <$> pText
         <|> ParText <$> pEmptyText
-    sp = getSourcePos <* char ' '
-    pEmptyText = (\pos -> [(" ", (pos, pos))]) <$> getSourcePos <* some sp
+    sps = (\pos -> (T.empty, (pos, pos))) <$> getSourcePos <* some (char ' ')
+    pEmptyText = (: []) . first (const " ") <$> sps
     pText = label "Paragraph text" $ do
-      try $ lookAhead (many sp *> satisfy smbl)
-      bSp <- maybeToList <$> optional sp
-      words <- some $ do
-        try $ lookAhead (many sp *> satisfy smbl)
-        many sp *> pWord
-      eSp <- fmap maybeToList . optional . try $ do
-        lookAhead (sc *> notFollowedBy eol)
-        sp
-      many sp
-      return $ map h bSp <> words <> map h eSp
-    h p = (T.empty, (p, p))
+      try $ lookAhead (optional sps *> satisfy smbl)
+      bSp <- fmap h . maybeToList <$> optional sps
+      words <- pWord `sepBy` try (sps *> lookAhead (satisfy smbl))
+      eSp <- try (fmap h . maybeToList <$> optional sps <* notFollowedBy eol) <|> pure []
+      return $ bSp <> words <> eSp
+    h = id
 
 pArgV :: Argument -> Parser ArgV
 pArgV arg = label (prettyArg arg) $ case atype arg of
