@@ -445,7 +445,7 @@ pPrefLineEnvironment defs@Definitions {prefs} = do
       parseMapEl prefs "prefix" pPrefix
   let pel = do
         ind <- indentLevel
-        string name
+        strLexeme name
         args <- mapM pArgV args
         body <- pElements insidePref IndGT ind defs
         return (args, body)
