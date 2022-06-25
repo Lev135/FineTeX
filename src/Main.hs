@@ -2,7 +2,7 @@
 
 module Main where
 
-import Control.Monad.Except (ExceptT, runExceptT)
+import Control.Monad.Except (runExceptT)
 import Control.Monad.Writer (runWriter)
 import Data.ByteString (writeFile)
 import Data.Char (isSpace)
@@ -14,10 +14,10 @@ import Data.Void (Void)
 import qualified IOUtils
 import Options.Applicative (readerError)
 import qualified Options.Applicative as Opt
-import Parser (Definitions, DocElement, Parser, readDoc)
+import Parser (Parser, readDoc)
 import Prettyprinter
   ( LayoutOptions (..),
-    PageWidth (AvailablePerLine),
+    PageWidth (..),
     defaultLayoutOptions,
     layoutSmart,
   )
@@ -29,8 +29,9 @@ import Printer
     PrintOpts (PrintOpts),
     texDoc,
   )
-import Processor (prettyError, processDoc)
+import Processor (processDoc)
 import Text.Megaparsec (MonadParsec (eof), errorBundlePretty, parse)
+import Utils (renderErrors)
 import Prelude hiding (writeFile)
 
 parsePart :: Parser a -> Text -> Either String a
@@ -43,11 +44,7 @@ parseAll p = parsePart (p <* eof)
 
 processFile :: Options -> IO ()
 processFile Options {inpFile, outpFile, pageWidth, printOpts} = do
-  res <-
-    runExceptT
-      ( readDoc inpFile ::
-          ExceptT String IO (Text, (Definitions, [DocElement]))
-      )
+  res <- runExceptT $ readDoc inpFile
   case res of
     Left e -> IOUtils.putStrLn e
     Right (file, (defs, docEls)) -> do
@@ -57,9 +54,7 @@ processFile Options {inpFile, outpFile, pageWidth, printOpts} = do
           let stream = layoutSmart renderOpts $ texDoc printOpts els'
           writeFile outpFile . encodeUtf8 . renderStrict . h $ stream
         _ ->
-          IOUtils.putStrLn $
-            T.unpack $
-              T.unlines $ map (prettyError (T.lines file)) errs
+          IOUtils.putStrLn $ T.unpack $ renderErrors file errs
   where
     renderOpts = defaultLayoutOptions {layoutPageWidth = AvailablePerLine pageWidth 1.0}
     h :: P.SimpleDocStream Ann -> P.SimpleDocStream Void

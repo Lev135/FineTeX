@@ -94,6 +94,9 @@ executable texgen
                        TupleSections
                        LambdaCase
                        FlexibleContexts
+                       ScopedTypeVariables
+                       ConstraintKinds
+                       RankNTypes
   ghc-options:
     -Wall
     -Wno-name-shadowing
