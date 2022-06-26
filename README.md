@@ -1,7 +1,7 @@
 <img src="https://user-images.githubusercontent.com/35816057/173631268-738c0e2d-2c27-4575-a6dd-577df144db88.png" alt="FineTeX" width="120"> &nbsp; language to be translated into LaTeX
 ===
 
-FineTeX is just a simple (for the moment) language with more flexibility in 
+FineTeX is just a simple (for the moment) language with more flexibility in
 commands definitions than pure LaTeX.
 However, the FineTex translator generates normal LaTeX code,
 that can be used as you wish.
@@ -40,9 +40,9 @@ See page on [Wiki](https://github.com/Lev135/latex-generator/wiki#getting-starte
 Contributing
 ---
 I'll be very glad if someone wants to contribute to this project.
-All constructive ideas and language features are welcome &mdash; you can open an issue at 
+All constructive ideas and language features are welcome &mdash; you can open an issue at
 [github](https://github.com/Lev135/latex-generator/issues).
-Also, the project really needs examples and guides. 
+Also, the project really needs examples and guides.
 
 Source code can be cloned from [GitHub repo](https://github.com/Lev135/latex-generator).
 For running translation execute:
