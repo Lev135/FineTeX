@@ -2,7 +2,7 @@
 ===
 
 FineTeX is just a simple (for the moment) language with more flexibility in
-commands definitions than pure LaTeX.
+commands' definitions than pure LaTeX.
 However, the FineTex translator generates normal LaTeX code which can be
 used as desired.
 
