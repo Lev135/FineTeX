@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE QuantifiedConstraints #-}
 {-# LANGUAGE StandaloneDeriving #-}
@@ -6,6 +7,11 @@
 module Parser
   ( Parser,
     Posed,
+=======
+module Parser
+  ( Pos,
+    Parser,
+>>>>>>> 91d6aa72c14ef12e55cec5409a5d3b1a804768c0
     readDoc,
     Definitions (..),
     DocElement (..),

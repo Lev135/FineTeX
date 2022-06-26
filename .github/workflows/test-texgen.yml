@@ -1,10 +1,6 @@
 name: Test-haskell
 
-on:
-  push:
-  pull_request:
-    branches: [ master ]
-
+on: push
 permissions:
   contents: read
 
@@ -52,7 +48,8 @@ jobs:
           savedOut="$dir/$base.tex"
           
           cabal run texgen -- "$src" -o $curOut
-          diff --ignore-all-space $curOut $savedOut
+          echo "Printing diff --ignore-all-space $curOut $savedOut"
+          sdiff --ignore-all-space -l $curOut $savedOut | cat -n | grep -v -e '($' || :
         done
     - name: Printing output diffs
       run: |
@@ -67,3 +64,5 @@ jobs:
           echo "Printing diff $curOut $savedOut"
           sdiff --ignore-trailing-space -l $curOut $savedOut | cat -n | grep -v -e '($' || :
         done
+    - name: Printing all
+      run: ls -R
