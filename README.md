@@ -42,7 +42,7 @@ Contributing
 I'll be very glad if someone wants to contribute to this project.
 All constructive ideas language features are welcome &mdash; you can open an issue at 
 [github](https://github.com/Lev135/latex-generator/issues).
-Also the project really needs examples and guides. 
+Also, the project really needs examples and guides. 
 
 Source code can be cloned from [GitHub repo](https://github.com/Lev135/latex-generator).
 For running translation execute:
