@@ -248,7 +248,9 @@ block pel = do
 --   Empty lines will be replaced by `eVal` (or ignored if it is `Nothing`) \\
 --   Each line will be parsed by `pel`
 region :: Maybe a -> Parser a -> IndentOrd -> Int -> Parser [a]
-region eVal pel ord ind = (sep *> pel `sepBy_` sep) <|> [] <$ (sc *> optional eol)
+region eVal pel ord ind =
+  ((sep *> pel `sepBy_` sep) <|> [] <$ (sc *> optional eol))
+    <* notFollowedBy sep
   where
     sep = checkIndent *> sc *> ((*> eVal) <$> optional eol) <* scn
     checkIndent =
