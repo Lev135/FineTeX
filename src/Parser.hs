@@ -1,6 +1,11 @@
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE QuantifiedConstraints #-}
+{-# LANGUAGE StandaloneDeriving #-}
+{-# LANGUAGE UndecidableInstances #-}
+
 module Parser
-  ( Pos,
-    Parser,
+  ( Parser,
+    Posed,
     readDoc,
     Definitions (..),
     DocElement (..),
@@ -8,6 +13,7 @@ module Parser
     ParEl (..),
     ParWord,
     Pref (..),
+    ArgType (..),
     ArgV (..),
     Argument (..),
     VerbMode (..),
@@ -20,24 +26,29 @@ import Control.Monad (replicateM_, unless, void)
 import Control.Monad.Catch (MonadCatch, catchIOError)
 import Control.Monad.Except (MonadError (throwError), MonadIO (liftIO), liftEither)
 import Control.Monad.Fail (MonadFail (fail))
+import Control.Monad.RWS (MonadState (..), MonadWriter (..), gets, modify)
+import Control.Monad.State (runState)
+import Control.Monad.Writer (WriterT (..))
 import Data.Bifunctor (Bifunctor (first))
 import Data.ByteString (readFile)
-import Data.Char (isAlphaNum, isLetter, isSpace)
+import Data.Char (isLetter, isSpace)
+import Data.Function (on)
 import Data.List.NonEmpty (fromList)
 import Data.Map (Map)
 import qualified Data.Map as M
-import Data.Maybe (fromMaybe)
+import Data.Maybe (fromMaybe, maybeToList)
 import Data.Text (Text, unpack)
 import qualified Data.Text as T
 import Data.Text.Encoding (decodeUtf8)
 import Data.Void (Void)
 import OptParser (OptParser, flagOpt, labelOpt, mkOptP, toParsec, (<??>), (<||>))
-import System.FilePath
+import qualified Prettyprinter as P
+import System.FilePath (dropFileName)
 import Text.Megaparsec
   ( ErrorItem (Label),
     MonadParsec (eof, getParserState, label, lookAhead, notFollowedBy, takeWhile1P, takeWhileP, try),
+    ParseErrorBundle,
     Parsec,
-    SourcePos,
     anySingle,
     choice,
     errorBundlePretty,
@@ -49,6 +60,7 @@ import Text.Megaparsec
     option,
     optional,
     parse,
+    runParser',
     satisfy,
     sepBy,
     sepBy1,
@@ -62,14 +74,52 @@ import Text.Megaparsec
 import qualified Text.Megaparsec as Megaparsec
 import Text.Megaparsec.Char (char, eol, space1, string)
 import qualified Text.Megaparsec.Char.Lexer as L
-import Utils (failMsg, listSepBy_, sepBy_, withError, (.:))
+import Utils (Box (..), Pos, PosC (..), PrettyErr (..), Sources, failMsg, foldMapBox, listSepBy_, prettyPos, sepBy_, sequenceBox, withError)
 import Prelude hiding (fail, readFile)
 
 -- Primitives
 
 type Parser = Parsec Void Text
 
-type Pos = (SourcePos, SourcePos)
+withPos :: Parser a -> Parser (a, Pos)
+withPos pa = do
+  b <- getSourcePos
+  a <- pa
+  e <- getSourcePos
+  return (a, (b, e))
+
+data Posed a = Posed {val :: a, pos :: Pos}
+
+instance Eq a => Eq (Posed a) where
+  (==) = (==) `on` unBox
+
+instance Ord a => Ord (Posed a) where
+  (<=) = (<=) `on` unBox
+
+instance Show a => Show (Posed a) where
+  show Posed {val, pos = (b, e)} = show (b, e) <> ": " <> show val
+
+instance Box Posed where
+  unBox = val
+
+instance PosC Posed where
+  getPos = pos
+
+instance Functor Posed where
+  fmap f Posed {val, pos} = Posed {val = f val, pos = pos}
+
+instance Foldable Posed where
+  foldMap = foldMapBox
+
+instance Traversable Posed where
+  sequenceA = sequenceBox
+
+withPos' :: Parser a -> Parser (Posed a)
+withPos' pa = do
+  b <- getSourcePos
+  a <- pa
+  e <- getSourcePos
+  return $ Posed a (b, e)
 
 -- | parse space or tab symbol
 lineSpace :: Parser ()
@@ -140,8 +190,8 @@ pPrefix =
     <?> "Prefix"
   where
     fstSmbls :: [Char]
-    fstSmbls = "!#$%^*-+,./|\\><[]~"
-    chPred ch = not $ isSpace ch || isAlphaNum ch || ch == '%'
+    fstSmbls = "!#$%^*-+,./|><[]~"
+    chPred ch = not $ isSpace ch || ch == '%'
 
 pPrefixL :: Parser Text
 pPrefixL = lexeme pPrefix
@@ -198,7 +248,7 @@ block pel = do
 --   Empty lines will be replaced by `eVal` (or ignored if it is `Nothing`) \\
 --   Each line will be parsed by `pel`
 region :: Maybe a -> Parser a -> IndentOrd -> Int -> Parser [a]
-region eVal pel ord ind = (sep *> pel `sepBy_` sep) <|> pure []
+region eVal pel ord ind = (sep *> pel `sepBy_` sep) <|> [] <$ (sc *> optional eol)
   where
     sep = checkIndent *> sc *> ((*> eVal) <$> optional eol) <* scn
     checkIndent =
@@ -225,7 +275,7 @@ parseMapEl m kType pk = do
 
 -- Definition block
 
-data ArgType = ArgString
+data ArgType = ArgString | ArgMath
   deriving (Show)
 
 type ArgName = Text
@@ -242,8 +292,9 @@ prettyArg Argument {atype, name} = "(" <> nameS <> " : " <> typeS <> ")"
     nameS = T.unpack name
     typeS = case atype of
       ArgString -> "String"
+      ArgMath -> "Math"
 
-newtype ArgV = ArgVString Text
+data ArgV = ArgVString Text | ArgVMath [ParWord]
   deriving (Show)
 
 data VerbMode = NoVerb | Verb | VerbIndent
@@ -262,9 +313,12 @@ data Environment = Environment
 data Pref = Pref
   { name :: Text,
     begin, end :: Maybe Text,
-    pref, sep :: Maybe Text,
+    args :: [Argument],
+    pref, suf, sep :: Maybe Text,
     innerMath :: Bool,
-    insidePref :: Bool
+    insidePref :: Bool,
+    grouping :: Bool,
+    oneLine :: Bool
   }
   deriving (Show)
 
@@ -276,22 +330,21 @@ data Command = Command
 data Definition
   = DefE Environment
   | DefMC Command
-  | DefC Command
   | DefP Pref
   deriving (Show)
 
-pDefinitionBlock :: Parser [Definition]
+pDefinitionBlock :: Parser [Posed Definition]
 pDefinitionBlock = skipImps *> scn *> (fromMaybe [] <$> optional pDefs)
   where
     pDefs = inEnvironment "Define" Nothing concat pDef
     pDef =
-      map DefE <$> pEnvsDef
-        <|> map DefMC <$> pMathCmdsDef
-        <|> map DefP <$> pPrefDef
+      map (fmap DefE) <$> pEnvsDef
+        <|> map (fmap DefMC) <$> pMathCmdsDef
+        <|> map (fmap DefP) <$> pPrefDef
     skipImps = many $ inArgsEnvironment "Import" Nothing pStringLiteralL (\_ _ -> ()) (return ()) <* scn
 
-pMathCmdsDef :: Parser [Command]
-pMathCmdsDef = inEnvironment "MathCommands" Nothing id $ do
+pMathCmdsDef :: Parser [Posed Command]
+pMathCmdsDef = inEnvironment "MathCommands" Nothing id . withPos' $ do
   name <- pCommandL
   strLexeme "="
   val <- pStringLiteralL
@@ -301,7 +354,8 @@ pMathCmdsDef = inEnvironment "MathCommands" Nothing id $ do
 pType :: Parser ArgType
 pType =
   ArgString <$ strLexeme "String"
-    <?> "argument type `String`"
+    <|> ArgMath <$ strLexeme "Math"
+      <?> "argument type `String` | `Math`"
 
 pDefArgs :: Parser [Argument]
 pDefArgs = many . label "argument `(<name> : <type>)`" $ do
@@ -331,8 +385,8 @@ pOpt = toParsec optNameP optArgsConsumer
     optNameP = try (string "@" >> pIdentifierL) <?> "option name `@<name>`"
     optArgsConsumer = takeWhileP Nothing (`notElem` ['@', '\n', '\r', '%'])
 
-pEnvsDef :: Parser [Environment]
-pEnvsDef = inEnvironment "Environments" Nothing id $ do
+pEnvsDef :: Parser [Posed Environment]
+pEnvsDef = inEnvironment "Environments" Nothing id . withPos' $ do
   name <- pIdentifierL
   args <- pDefArgs
   strLexeme "="
@@ -352,57 +406,99 @@ pEnvsDef = inEnvironment "Environments" Nothing id $ do
   eol
   return Environment {name, begin, end, args, innerMath, innerVerb, insidePref}
 
-pPrefDef :: Parser [Pref]
-pPrefDef = inEnvironment "Prefs" Nothing id $ do
+pPrefDef :: Parser [Posed Pref]
+pPrefDef = inEnvironment "Prefs" Nothing id . withPos' $ do
   name <- pPrefixL
+  args <- pDefArgs
   strLexeme "="
-  ((begin, end), pref, sep, innerMath, insidePref) <-
+  ((begin, end), pref, suf, sep, innerMath, insidePref, grouping, oneLine) <-
     pOpt $ do
       beginEnd <- pBeginEndOpt
       pref <- optional (mkOptP "Pref" pStringLiteralL)
+      suf <- optional (mkOptP "Suf" pStringLiteralL)
       sep <- optional (mkOptP "Sep" pStringLiteralL)
       math <- flagOpt "Math"
       insidePref <- not <$> flagOpt "NoPrefInside"
-      return (beginEnd, pref, sep, math, insidePref)
+      grouping <- not <$> flagOpt "NoGroup"
+      oneLine <- flagOpt "OneLine"
+      return (beginEnd, pref, suf, sep, math, insidePref, grouping, oneLine)
   eol
-  return Pref {name, begin, end, pref, sep, innerMath, insidePref}
+  return Pref {name, begin, end, args, pref, suf, sep, innerMath, insidePref, grouping, oneLine}
 
 -- Processing definitions
 
-data Definitions = Definitions
-  { envs :: Map Text Environment,
-    cmds :: Map Text Command,
-    mathCmds :: Map Text Command,
-    prefs :: Map Text Pref
+data Definitions p = Definitions
+  { envs :: Map Text (p Environment),
+    mathCmds :: Map Text (p Command),
+    prefs :: Map Text (p Pref)
   }
-  deriving (Show)
 
-instance Semigroup Definitions where
-  (Definitions a b c d) <> (Definitions a' b' c' d') =
-    Definitions (a <> a') (b <> b') (c <> c') (d <> d')
+deriving instance (forall a. Show a => Show (p a), Box p) => Show (Definitions p)
 
-instance Monoid Definitions where
-  mempty = Definitions mempty mempty mempty mempty
+instance Semigroup (Definitions p) where
+  (Definitions a b c) <> (Definitions a' b' c') =
+    Definitions (a <> a') (b <> b') (c <> c')
 
-processDefs :: [Definition] -> Definitions
-processDefs = mconcat . map processDef
+instance Monoid (Definitions p) where
+  mempty = Definitions mempty mempty mempty
 
-processDef :: Definition -> Definitions
-processDef (DefE env@Environment {name}) =
-  mempty {envs = M.singleton name env}
-processDef (DefC cmd@Command {name}) =
-  mempty {cmds = M.singleton name cmd}
-processDef (DefMC cmd@Command {name}) =
-  mempty {mathCmds = M.singleton name cmd}
-processDef (DefP pr@Pref {name}) =
-  mempty {prefs = M.singleton name pr}
+data DefType = DefTEnv | DefTMathCmd | DefTPref
+
+data ProcessDefsError
+  = MultipleDecl DefType Text Pos Pos
+
+instance PrettyErr ProcessDefsError where
+  prettyErr src (MultipleDecl t name p p') =
+    P.vsep
+      [ prettyPos src lbl p,
+        prettyPos src "Previously defined here" p'
+      ]
+    where
+      lbl = "Multiple definitions of " <> tName <> " '" <> name <> "'"
+      tName = case t of
+        DefTEnv -> "environment"
+        DefTMathCmd -> "command"
+        DefTPref -> "pref"
+
+type MState m p =
+  (MonadWriter [ProcessDefsError] m, MonadState (Definitions p) m)
+
+processDefs :: forall m p. (MState m p, PosC p) => [p Definition] -> m ()
+processDefs = mapM_ h
+  where
+    h :: p Definition -> m ()
+    h pdef = case unBox pdef of
+      DefE env@Environment {name} -> do
+        menv' <- gets $ M.lookup name . envs
+        case menv' of
+          Nothing ->
+            modify $ \defs@Definitions {envs} ->
+              defs {envs = M.insert name (env <$ pdef) envs}
+          Just penv' ->
+            tell [MultipleDecl DefTEnv name (getPos pdef) (getPos penv')]
+      DefMC cmd@Command {name} -> do
+        mcmd' <- gets $ M.lookup name . mathCmds
+        case mcmd' of
+          Nothing ->
+            modify $ \defs@Definitions {mathCmds} ->
+              defs {mathCmds = M.insert name (cmd <$ pdef) mathCmds}
+          Just pcmd' ->
+            tell [MultipleDecl DefTMathCmd name (getPos pdef) (getPos pcmd')]
+      DefP pref@Pref {name} -> do
+        mpref' <- gets $ M.lookup name . envs
+        case mpref' of
+          Nothing ->
+            modify $ \defs@Definitions {prefs} ->
+              defs {prefs = M.insert name (pref <$ pdef) prefs}
+          Just ppref' ->
+            tell [MultipleDecl DefTPref name (getPos pdef) (getPos ppref')]
 
 -- Document body
 
 data DocElement
   = DocParagraph [[ParEl]]
   | DocEnvironment Environment [ArgV] [DocElement]
-  | DocPrefGroup Pref [[DocElement]]
+  | DocPrefGroup Pref [([ArgV], [DocElement])]
   | DocEmptyLine
   | DocVerb Bool [Text]
   deriving (Show)
@@ -414,74 +510,69 @@ data ParEl
   | ParFormula [ParWord]
   deriving (Show)
 
-pDocument :: Definitions -> Parser [DocElement]
-pDocument defs = scn *> pElements True IndGEQ 0 defs <* scn
+pDocument :: Box p => Definitions p -> Parser [DocElement]
+pDocument defs = scn *> pElements True IndGEQ 0 defs
 
-pElements :: Bool -> IndentOrd -> Int -> Definitions -> Parser [DocElement]
+pElements :: Box p => Bool -> IndentOrd -> Int -> Definitions p -> Parser [DocElement]
 pElements enPref ord ind defs = region (Just DocEmptyLine) (pElement enPref defs) ord ind
 
-pElement :: Bool -> Definitions -> Parser DocElement
+pElement :: Box p => Bool -> Definitions p -> Parser DocElement
 pElement enPref defs =
   choice $
     [pPrefLineEnvironment defs | enPref]
       <> [ pEnvironment defs,
-           pParagraph defs
+           pParagraph
          ]
 
-pPrefLineEnvironment :: Definitions -> Parser DocElement
+pPrefLineEnvironment :: Box p => Definitions p -> Parser DocElement
 pPrefLineEnvironment defs@Definitions {prefs} = do
-  ind <- indentLevel
-  pref@Pref {insidePref, name} <-
+  pref@Pref {insidePref, name, grouping, args} <-
     lookAhead $
-      parseMapEl prefs "prefix" (try $ pPrefix <* sp)
-  DocPrefGroup pref <$> block (try (string name <* sp) *> pElements insidePref IndGT ind defs)
-  where
-    sp = string " " <|> eol
+      unBox <$> parseMapEl prefs "prefix" pPrefix
+  let pel = do
+        ind <- indentLevel
+        strLexeme name
+        args <- mapM pArgV args
+        body <- pElements insidePref IndGT ind defs
+        return (args, body)
+  els <- if grouping then block pel else (: []) <$> pel
+  return $ DocPrefGroup pref els
 
-pParagraph :: Definitions -> Parser DocElement
-pParagraph _ = DocParagraph <$> block pParLine
+pParagraph :: Parser DocElement
+pParagraph = DocParagraph <$> block pParLine
+
+smbl :: Char -> Bool
+smbl = (`notElem` ['`', '\r', '\n', '%', ' '])
+
+pWord :: Parser ParWord
+pWord = withPos $ takeWhile1P Nothing smbl
+
+pForm :: Parser [ParWord]
+pForm =
+  char '`' *> sc *> many (pWord <* sc) <* char '`'
+    <?> "Inline formula"
 
 pParLine :: Parser [ParEl]
-pParLine = notFollowedBy (string "@") *> someTill (pForm <|> pText <|> pEmptyText) (try $ sc <* eol)
+pParLine = notFollowedBy (string "@") *> someTill pEl (try $ sc <* eol)
   where
-    word :: Parser ParWord
-    word = do
-      begin <- getSourcePos
-      val <- takeWhile1P Nothing smbl
-      end <- getSourcePos
-      return (val, (begin, end))
-    sp :: Parser Char
-    sp = char ' '
-    pEmptyText = do
-      pos <- getSourcePos
-      some sp
-      return $ ParText $ [(" ", (pos, pos))]
+    pEl =
+      ParFormula <$> pForm
+        <|> ParText <$> pText
+        <|> ParText <$> pEmptyText
+    sps = (\pos -> (T.empty, (pos, pos))) <$> getSourcePos <* some (char ' ')
+    pEmptyText = (: []) . first (const " ") <$> sps
     pText = label "Paragraph text" $ do
-      try $ lookAhead (many sp *> satisfy smbl)
-      bPos <- getSourcePos
-      bSpace <- optional sp
-      words <- some $ do
-        try $ lookAhead (many sp *> satisfy smbl)
-        many sp *> word
-      ePos <- getSourcePos
-      eSpace <- optional . try $ do
-        lookAhead (sc *> notFollowedBy eol)
-        sp
-      many sp
-      return $ ParText $ h bPos bSpace <> words <> h ePos eSpace
-    h p (Just _) = [(T.empty, (p, p))]
-    h _ Nothing = []
-    pForm = label "Inline formula" $ do
-      char '`'
-      many sp
-      words <- many (word <* many sp)
-      char '`'
-      return $ ParFormula words
-    smbl = (`notElem` ['`', '\r', '\n', '%', ' '])
+      try $ lookAhead (optional sps *> satisfy smbl)
+      bSp <- fmap h . maybeToList <$> optional sps
+      words <- pWord `sepBy` try (sps *> lookAhead (satisfy smbl))
+      eSp <- try (fmap h . maybeToList <$> optional sps <* notFollowedBy eol) <|> pure []
+      return $ bSp <> words <> eSp
+    h = id
 
 pArgV :: Argument -> Parser ArgV
 pArgV arg = label (prettyArg arg) $ case atype arg of
   ArgString -> ArgVString <$> pStringLiteralL
+  ArgMath -> ArgVMath <$> pForm
 
 pVerb :: Bool -> Int -> Parser DocElement
 pVerb verbInd ind =
@@ -501,12 +592,12 @@ pVerb verbInd ind =
     indGuard = L.indentGuard (void $ many lineSpace) GT posInd
     posInd = mkPos $ ind + 1
 
-pEnvironment :: Definitions -> Parser DocElement
+pEnvironment :: Box p => Definitions p -> Parser DocElement
 pEnvironment defs@Definitions {envs} = do
   ind <- indentLevel
-  env@Environment {innerVerb, insidePref} <-
-    parseMapEl envs "environment" (string "@" *> pIdentifierL)
-  args <- mapM pArgV $ args env
+  env@Environment {innerVerb, insidePref, args} <-
+    unBox <$> parseMapEl envs "environment" (string "@" *> pIdentifierL)
+  args <- mapM pArgV args
   sc <* eol
   DocEnvironment env args
     <$> case innerVerb of
@@ -516,43 +607,66 @@ pEnvironment defs@Definitions {envs} = do
 
 -- File readers and parsers
 
--- | Parse file with given definitions from imported files
-pFile :: Definitions -> Parser (Definitions, [DocElement])
-pFile impDefs = do
-  defs <- processDefs <$> pDefinitionBlock
-  let defs' = impDefs <> defs
-  doc <- pDocument defs'
-  return (defs', doc)
-
 -- | Parse import filenames
-pImportFilenames :: Parser [FilePath]
+pImportFilenames :: Parser [Posed FilePath]
 pImportFilenames =
   L.nonIndented scn $
-    try (atLexeme "Import" *> fmap unpack pStringLiteralL `sepBy` try (eol *> scn *> atLexeme "Import"))
+    try
+      ( withPos' (inArgsEnvironment "Import" Nothing pStringLiteralL (\t _ -> unpack t) (return ()))
+          `sepBy` (try . lookAhead $ eol *> scn *> atLexeme "Import")
+      )
       <|> return []
 
-scanImportFilenames :: FilePath -> Text -> Either String [FilePath]
-scanImportFilenames =
-  first (("Error while reading imports: " <>) . errorBundlePretty)
-    .: parse pImportFilenames
+data ReadDocError
+  = OpenFileError FilePath IOError
+  | ParseError (ParseErrorBundle Text Void)
+  | ImportError FilePath Pos ReadDocError
+  | ProcessError [ProcessDefsError]
+
+instance PrettyErr ReadDocError where
+  prettyErr src e = case e of
+    OpenFileError file ioE ->
+      "Unable to open file '" <> P.pretty file <> "': " <> P.pretty (show ioE)
+    ParseError peb -> "Parse error: " <> P.pretty (errorBundlePretty peb)
+    ImportError file p rde ->
+      P.vsep
+        [ prettyPos src ("In '" <> T.pack file <> "' imported from here") p,
+          prettyErr src rde
+        ]
+    ProcessError procErrs ->
+      P.vsep (prettyErr src <$> procErrs)
 
 readDoc ::
-  (MonadError String m, MonadIO m, MonadCatch m) =>
+  (MonadError ReadDocError m, MonadIO m, MonadCatch m, MonadWriter Sources m) =>
   FilePath ->
-  m (Text, (Definitions, [DocElement]))
+  m (Definitions Posed, [DocElement])
 readDoc fileName = do
   file <-
     decodeUtf8 <$> liftIO (readFile fileName)
       `catchIOError` \e ->
-        throwError ("Unable to open file '" <> fileName <> "': " <> show e)
-  impFNames <- liftEither $ scanImportFilenames fileName file
+        throwError (OpenFileError fileName e)
+  tell $ M.singleton fileName (T.lines file)
+  (impFNames, state') <-
+    liftEither $
+      first ParseError $
+        parse ((,) <$> pImportFilenames <*> getParserState) fileName file
   defs <-
-    mconcat
-      <$> mapM
-        ((fst . snd <$>) . withError addPrefix . readDoc . (dropFileName fileName <>))
-        impFNames
-  case parse (pFile defs) fileName file of
-    Left e -> throwError $ errorBundlePretty e
-    Right res -> return (file, res)
-  where
-    addPrefix eStr = "While processing imports from " <> fileName <> ":\n" <> eStr
+    let readDoc' pf = withError (ImportError (unBox pf) (getPos pf)) (readDoc (unBox pf))
+     in mconcat
+          <$> mapM
+            ((fst <$>) . readDoc' . fmap (dropFileName fileName <>))
+            impFNames
+  (defs', state'') <- do
+    let (state'', mdefs') = runParser' pDefinitionBlock state'
+    defs' <- liftEither $ first ParseError mdefs'
+    return (defs', state'')
+  defs'' <- do
+    let (((), errs), defs'') = runState (runWriterT $ processDefs defs') defs
+    case errs of
+      [] -> return defs''
+      _ -> throwError $ ProcessError errs
+  doc <-
+    liftEither $
+      first ParseError $
+        snd $ runParser' (pDocument defs'') state''
+  return (defs'', doc)

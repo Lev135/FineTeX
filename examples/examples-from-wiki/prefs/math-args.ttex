@@ -1,0 +1,9 @@
+@Define
+  @Prefs
+    ## (v : String) (op : Math) = @Pref "$ $v_1 $op $v_2 $op \\ldots $op v_n $"
+  @MathCommands
+    /\ = "\\wedge"
+
+Example:
+  ## "a" `/\` Some text here
+  ## "b" `+`  Some text there

@@ -1,0 +1,9 @@
+@Define
+  @Prefs
+    |# (n : String) = @TexBeginEnd "argument" @Pref "arg is $n:" @Suf "suffix $n"
+
+First example:
+  |# "a" some text here
+  |# "b" another text
+
+
