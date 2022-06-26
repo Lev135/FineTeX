@@ -40,7 +40,7 @@ See page on [Wiki](https://github.com/Lev135/latex-generator/wiki#getting-starte
 Contributing
 ---
 I'll be very glad if someone wants to contribute to this project.
-All constructive ideas language features are welcome &mdash; you can open issue at 
+All constructive ideas language features are welcome &mdash; you can open an issue at 
 [github](https://github.com/Lev135/latex-generator/issues).
 Also the project really needs examples and guides. 
 
