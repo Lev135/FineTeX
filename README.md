@@ -44,7 +44,7 @@ All constructive ideas and language features are welcome &mdash; you can open an
 [github](https://github.com/Lev135/latex-generator/issues).
 Also, the project really needs examples and guides.
 
-Source code can be cloned from [GitHub repo](https://github.com/Lev135/latex-generator).
+Source code can be cloned from [the GitHub repo](https://github.com/Lev135/latex-generator).
 For running translation execute:
 ```
     cabal new-update
