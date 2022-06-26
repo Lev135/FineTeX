@@ -45,7 +45,7 @@ All constructive ideas and language features are welcome &mdash; you can open an
 Also, the project really needs examples and guides.
 
 Source code can be cloned from [the GitHub repo](https://github.com/Lev135/latex-generator).
-For running translation execute:
+For running translation, execute:
 ```
     cabal new-update
     cabal new-run texgen -- examples/example.ttex
