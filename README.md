@@ -3,8 +3,8 @@
 
 FineTeX is just a simple (for the moment) language with more flexibility in
 commands definitions than pure LaTeX.
-However, the FineTex translator generates normal LaTeX code,
-that can be used as you wish.
+However, the FineTex translator generates normal LaTeX code which can be
+used as desired.
 
 Features available at the moment
 ---
