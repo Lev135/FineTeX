@@ -12,7 +12,6 @@ import qualified Data.Map as M
 import Data.Text (Text)
 import qualified Data.Text as T
 import Data.Text.Lazy (fromStrict, toStrict)
-<<<<<<< HEAD
 import Data.Void (Void)
 import Parser
   ( ArgType (..),
@@ -20,11 +19,6 @@ import Parser
     Argument (..),
     Command (..),
     Definitions (..),
-=======
-import Parser
-  ( Command (val),
-    Definitions (Definitions, mathCmds),
->>>>>>> 91d6aa72c14ef12e55cec5409a5d3b1a804768c0
     DocElement (..),
     Environment (..),
     ParEl (..),
