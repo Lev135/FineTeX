@@ -1,6 +1,7 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE QuantifiedConstraints #-}
 {-# LANGUAGE StandaloneDeriving #-}
+{-# LANGUAGE UndecidableInstances #-}
 
 module Parser
   ( Parser,
@@ -46,6 +47,7 @@ import System.FilePath (dropFileName)
 import Text.Megaparsec
   ( ErrorItem (Label),
     MonadParsec (eof, getParserState, label, lookAhead, notFollowedBy, takeWhile1P, takeWhileP, try),
+    ParseErrorBundle,
     Parsec,
     anySingle,
     choice,
@@ -72,7 +74,7 @@ import Text.Megaparsec
 import qualified Text.Megaparsec as Megaparsec
 import Text.Megaparsec.Char (char, eol, space1, string)
 import qualified Text.Megaparsec.Char.Lexer as L
-import Utils (Box (..), Pos, PosC (..), PrettyErr (..), failMsg, foldMapBox, listSepBy_, prettyPos, renderErrors, sepBy_, sequenceBox, withError)
+import Utils (Box (..), Pos, PosC (..), PrettyErr (..), Sources, failMsg, foldMapBox, listSepBy_, prettyPos, sepBy_, sequenceBox, withError)
 import Prelude hiding (fail, readFile)
 
 -- Primitives
@@ -95,7 +97,7 @@ instance Ord a => Ord (Posed a) where
   (<=) = (<=) `on` unBox
 
 instance Show a => Show (Posed a) where
-  show = show . unBox
+  show Posed {val, pos = (b, e)} = show (b, e) <> ": " <> show val
 
 instance Box Posed where
   unBox = val
@@ -431,7 +433,7 @@ data Definitions p = Definitions
     prefs :: Map Text (p Pref)
   }
 
-deriving instance Box p => Show (Definitions p)
+deriving instance (forall a. Show a => Show (p a), Box p) => Show (Definitions p)
 
 instance Semigroup (Definitions p) where
   (Definitions a b c) <> (Definitions a' b' c') =
@@ -606,43 +608,65 @@ pEnvironment defs@Definitions {envs} = do
 -- File readers and parsers
 
 -- | Parse import filenames
-pImportFilenames :: Parser [FilePath]
+pImportFilenames :: Parser [Posed FilePath]
 pImportFilenames =
   L.nonIndented scn $
-    try (atLexeme "Import" *> fmap unpack pStringLiteralL `sepBy` try (eol *> scn *> atLexeme "Import"))
+    try
+      ( withPos' (inArgsEnvironment "Import" Nothing pStringLiteralL (\t _ -> unpack t) (return ()))
+          `sepBy` (try . lookAhead $ eol *> scn *> atLexeme "Import")
+      )
       <|> return []
 
+data ReadDocError
+  = OpenFileError FilePath IOError
+  | ParseError (ParseErrorBundle Text Void)
+  | ImportError FilePath Pos ReadDocError
+  | ProcessError [ProcessDefsError]
+
+instance PrettyErr ReadDocError where
+  prettyErr src e = case e of
+    OpenFileError file ioE ->
+      "Unable to open file '" <> P.pretty file <> "': " <> P.pretty (show ioE)
+    ParseError peb -> "Parse error: " <> P.pretty (errorBundlePretty peb)
+    ImportError file p rde ->
+      P.vsep
+        [ prettyPos src ("In '" <> T.pack file <> "' imported from here") p,
+          prettyErr src rde
+        ]
+    ProcessError procErrs ->
+      P.vsep (prettyErr src <$> procErrs)
+
 readDoc ::
-  (MonadError String m, MonadIO m, MonadCatch m) =>
+  (MonadError ReadDocError m, MonadIO m, MonadCatch m, MonadWriter Sources m) =>
   FilePath ->
-  m (Text, (Definitions Posed, [DocElement]))
+  m (Definitions Posed, [DocElement])
 readDoc fileName = do
   file <-
     decodeUtf8 <$> liftIO (readFile fileName)
       `catchIOError` \e ->
-        throwError ("Unable to open file '" <> fileName <> "': " <> show e)
-  impFNames <-
+        throwError (OpenFileError fileName e)
+  tell $ M.singleton fileName (T.lines file)
+  (impFNames, state') <-
     liftEither $
-      first (("Error while reading imports: " <>) . errorBundlePretty) $
-        parse pImportFilenames fileName file
+      first ParseError $
+        parse ((,) <$> pImportFilenames <*> getParserState) fileName file
   defs <-
-    mconcat
-      <$> mapM
-        ((fst . snd <$>) . withError addPrefix . readDoc . (dropFileName fileName <>))
-        impFNames
-  (defs', state') <-
-    liftEither $
-      first errorBundlePretty $
-        parse ((,) <$> pDefinitionBlock <*> getParserState) fileName file
+    let readDoc' pf = withError (ImportError (unBox pf) (getPos pf)) (readDoc (unBox pf))
+     in mconcat
+          <$> mapM
+            ((fst <$>) . readDoc' . fmap (dropFileName fileName <>))
+            impFNames
+  (defs', state'') <- do
+    let (state'', mdefs') = runParser' pDefinitionBlock state'
+    defs' <- liftEither $ first ParseError mdefs'
+    return (defs', state'')
   defs'' <- do
     let (((), errs), defs'') = runState (runWriterT $ processDefs defs') defs
     case errs of
       [] -> return defs''
-      _ -> throwError $ T.unpack $ renderErrors file errs
+      _ -> throwError $ ProcessError errs
   doc <-
     liftEither $
-      first errorBundlePretty $
-        snd $ runParser' (pDocument defs'') state'
-  return (file, (defs'', doc))
-  where
-    addPrefix eStr = "While processing imports from " <> fileName <> ":\n" <> eStr
+      first ParseError $
+        snd $ runParser' (pDocument defs'') state''
+  return (defs'', doc)

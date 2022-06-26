@@ -5,6 +5,8 @@ module Utils where
 
 import Control.Applicative (Alternative (many, (<|>)))
 import Control.Monad.Except (MonadError (catchError, throwError))
+import Data.Map (Map)
+import qualified Data.Map as M
 import Data.Maybe (maybeToList)
 import Data.Text (Text)
 import qualified Data.Text as T
@@ -65,8 +67,7 @@ type Pos = (SourcePos, SourcePos)
 class
   ( Traversable p,
     (forall a. Eq a => Eq (p a)),
-    (forall a. Ord a => Ord (p a)),
-    (forall a. Show a => Show (p a))
+    (forall a. Ord a => Ord (p a))
   ) =>
   Box p
   where
@@ -81,10 +82,10 @@ sequenceBox pma = (<$ pma) <$> unBox pma
 class Box p => PosC p where
   getPos :: p a -> Pos
 
-type SourceText = [Text]
+type Sources = Map FilePath [Text]
 
 class PrettyErr e where
-  prettyErr :: SourceText -> e -> ErrDoc
+  prettyErr :: Sources -> e -> ErrDoc
 
 class PrettyErrType et where
   prettyErrType :: et -> Text
@@ -100,30 +101,36 @@ instance (PrettyErrType et, PrettyErr e') => PrettyErr (Error et e') where
 
 type ErrDoc = P.Doc Void
 
-prettyPos :: SourceText -> Text -> Pos -> ErrDoc
-prettyPos lines msg (b, e) =
+prettyPos :: Sources -> Text -> Pos -> ErrDoc
+prettyPos srcs msg (b, e) =
   P.vcat
     [ P.hcat (P.pretty <$> [file, ":", show line, ":", show col, ": "])
         <> P.pretty msg,
-      P.pretty $ lines !! (line - 1),
-      P.pretty mask
+      code
     ]
   where
     file = sourceName b
     line = unPos $ sourceLine b
     col = unPos $ sourceColumn b
-    col' = unPos $ sourceColumn e
-    mask =
-      T.concat
-        [ repl (col - 1) ' ',
-          T.singleton '^',
-          repl (col' - col - 1) '~',
-          T.singleton '^'
-        ]
-    repl n ch = T.replicate n (T.singleton ch)
+    code = case M.lookup file srcs of
+      Nothing -> P.pretty ("Unable to show source lines" :: Text)
+      Just lines ->
+        let lineStr = lines !! (line - 1)
+            col'
+              | unPos (sourceLine e) == line = unPos $ sourceColumn e
+              | otherwise = T.length lineStr
+            mask =
+              T.concat
+                [ repl (col - 1) ' ',
+                  T.singleton '^',
+                  repl (col' - col - 2) '~',
+                  if col' == col + 1 then T.empty else T.singleton '^'
+                ]
+            repl n ch = T.replicate n (T.singleton ch)
+         in P.vcat [P.pretty lineStr, P.pretty mask]
 
-renderErrors :: PrettyErr e => Text -> [e] -> Text
-renderErrors file =
-  P.renderStrict . P.layoutSmart errRenderOpts . P.vcat . map (prettyErr (T.lines file))
+renderErrors :: PrettyErr e => Sources -> [e] -> Text
+renderErrors srcs =
+  P.renderStrict . P.layoutSmart errRenderOpts . P.vcat . map (prettyErr srcs)
   where
     errRenderOpts = P.defaultLayoutOptions {P.layoutPageWidth = P.Unbounded}

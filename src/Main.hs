@@ -3,7 +3,7 @@
 module Main where
 
 import Control.Monad.Except (runExceptT)
-import Control.Monad.Writer (runWriter)
+import Control.Monad.Writer (WriterT (runWriterT), runWriter)
 import Data.ByteString (writeFile)
 import Data.Char (isSpace)
 import Data.List.Extra (spanEnd)
@@ -44,17 +44,17 @@ parseAll p = parsePart (p <* eof)
 
 processFile :: Options -> IO ()
 processFile Options {inpFile, outpFile, pageWidth, printOpts} = do
-  res <- runExceptT $ readDoc inpFile
+  (res, srcs) <- runWriterT $ runExceptT $ readDoc inpFile
   case res of
-    Left e -> IOUtils.putStrLn e
-    Right (file, (defs, docEls)) -> do
+    Left e -> IOUtils.putStrLn $ T.unpack $ renderErrors srcs [e]
+    Right (defs, docEls) -> do
       let (els', errs) = runWriter $ processDoc defs docEls
       case errs of
         [] -> do
           let stream = layoutSmart renderOpts $ texDoc printOpts els'
           writeFile outpFile . encodeUtf8 . renderStrict . h $ stream
         _ ->
-          IOUtils.putStrLn $ T.unpack $ renderErrors file errs
+          IOUtils.putStrLn $ T.unpack $ renderErrors srcs errs
   where
     renderOpts = defaultLayoutOptions {layoutPageWidth = AvailablePerLine pageWidth 1.0}
     h :: P.SimpleDocStream Ann -> P.SimpleDocStream Void
