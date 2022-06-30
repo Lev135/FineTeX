@@ -349,7 +349,7 @@ data Definition
   deriving (Show)
 
 pDefinitionBlock :: Parser [Posed Definition]
-pDefinitionBlock = skipImps *> scn *> (fromMaybe [] <$> optional pDefs)
+pDefinitionBlock = fromMaybe [] <$> optional pDefs
   where
     pDefs = inEnvironment "Define" Nothing concat pDef
     pDef =
@@ -357,7 +357,6 @@ pDefinitionBlock = skipImps *> scn *> (fromMaybe [] <$> optional pDefs)
         <|> map (fmap DefMC) <$> pMathCmdsDef
         <|> map (fmap DefP) <$> pPrefDef
         <|> map (fmap DefI) <$> pInlineDef
-    skipImps = many $ inArgsEnvironment "Import" Nothing pStringLiteralL (\_ _ -> ()) (return ()) <* scn
 
 pMathCmdsDef :: Parser [Posed Command]
 pMathCmdsDef = inEnvironment "MathCommands" Nothing id . withPos' $ do
@@ -662,11 +661,8 @@ pEnvironment defs@Definitions {envs} = do
 pImportFilenames :: Parser [Posed FilePath]
 pImportFilenames =
   L.nonIndented scn $
-    try
-      ( withPos' (inArgsEnvironment "Import" Nothing pStringLiteralL (\t _ -> unpack t) (return ()))
-          `sepBy` (try . lookAhead $ eol *> scn *> atLexeme "Import")
-      )
-      <|> return []
+    withPos' (inArgsEnvironment "Import" Nothing pStringLiteralL (\t _ -> unpack t) (return ()) <* scn)
+      `sepBy` (try . lookAhead $ atLexeme "Import")
 
 data ReadDocError
   = OpenFileError FilePath IOError
