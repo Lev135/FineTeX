@@ -14,3 +14,5 @@
     <=           = "\\leq"
     >=           = "\\geq"
     !=           = "\\neq"
+  @Inlines
+    ` ` = @Begin "$" @End "$" @Math

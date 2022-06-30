@@ -14,6 +14,7 @@ import Parser
     Argument (Argument, name),
     DocElement (..),
     Environment (..),
+    Inline (..),
     ParEl (..),
     Pref (..),
     VerbMode (NoVerb, VerbIndent),
@@ -99,14 +100,15 @@ texDocElement _ (DocVerb _ txts) = P.vsep $ pretty <$> txts
 
 texParEl :: ParEl -> Doc
 texParEl (ParText t) = P.fillSep $ pretty . fst <$> t
-texParEl (ParFormula t) = P.pageWidth $ \pgWidth ->
+texParEl (ParInline Inline {begin, end} t) = P.pageWidth $ \pgWidth ->
   P.nesting $ \nestLvl ->
     if ribbonWidth pgWidth nestLvl > elsWidth
       then sepLayout
       else fillLayout
   where
-    sepLayout = P.enclose "$" "$" $ P.hsep $ pretty . fst <$> t
-    fillLayout = P.enclose "$" "$" $ P.fillSep $ pretty . fst <$> t
+    enclose = P.enclose (pretty begin) (pretty end)
+    sepLayout = enclose $ P.hsep $ pretty . fst <$> t
+    fillLayout = enclose $ P.fillSep $ pretty . fst <$> t
     elsWidth = sum (T.length . fst <$> t) + (length t + 1)
     ribbonWidth (P.AvailablePerLine lineLength ribbonFraction) nestLvl =
       floor $ fromIntegral (lineLength - nestLvl `max` 0) * ribbonFraction

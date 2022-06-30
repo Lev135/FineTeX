@@ -11,6 +11,7 @@ module Parser
     DocElement (..),
     Environment (..),
     ParEl (..),
+    Inline (..),
     ParWord,
     Pref (..),
     ArgType (..),
@@ -37,6 +38,8 @@ import Data.List.NonEmpty (fromList)
 import Data.Map (Map)
 import qualified Data.Map as M
 import Data.Maybe (fromMaybe, maybeToList)
+import Data.Set (Set)
+import qualified Data.Set as S
 import Data.Text (Text, unpack)
 import qualified Data.Text as T
 import Data.Text.Encoding (decodeUtf8)
@@ -181,7 +184,7 @@ pIdentifierL =
 
 pOperator :: Parser Text
 pOperator =
-  takeWhile1P Nothing (\ch -> not (isSpace ch) && ch `notElem` ['%', '`'])
+  takeWhile1P Nothing (\ch -> not (isSpace ch) && ch /= '%')
     <?> "Operator"
 
 pPrefix :: Parser Text
@@ -329,10 +332,20 @@ data Command = Command
   }
   deriving (Show)
 
+type Borders = (Text, Text)
+
+data Inline = Inline
+  { borders :: Borders,
+    begin, end :: Maybe Text,
+    innerMath :: Bool
+  }
+  deriving (Show, Eq, Ord)
+
 data Definition
   = DefE Environment
   | DefMC Command
   | DefP Pref
+  | DefI Inline
   deriving (Show)
 
 pDefinitionBlock :: Parser [Posed Definition]
@@ -343,6 +356,7 @@ pDefinitionBlock = skipImps *> scn *> (fromMaybe [] <$> optional pDefs)
       map (fmap DefE) <$> pEnvsDef
         <|> map (fmap DefMC) <$> pMathCmdsDef
         <|> map (fmap DefP) <$> pPrefDef
+        <|> map (fmap DefI) <$> pInlineDef
     skipImps = many $ inArgsEnvironment "Import" Nothing pStringLiteralL (\_ _ -> ()) (return ()) <* scn
 
 pMathCmdsDef :: Parser [Posed Command]
@@ -427,22 +441,35 @@ pPrefDef = inEnvironment "Prefs" Nothing id . withPos' $ do
   eol
   return Pref {name, begin, end, args, pref, suf, sep, innerMath, insidePref, grouping, oneLine}
 
+pInlineDef :: Parser [Posed Inline]
+pInlineDef = inEnvironment "Inlines" Nothing id . withPos' $ do
+  startStr <- pCommandL
+  endStr <- pCommandL
+  strLexeme "="
+  (begin, end, innerMath) <- pOpt $ do
+    (begin, end) <- pBeginEndOpt
+    innerMath <- flagOpt "Math"
+    return (begin, end, innerMath)
+  return Inline {borders = (startStr, endStr), begin, end, innerMath}
+
 -- Processing definitions
 
 data Definitions p = Definitions
   { envs :: Map Text (p Environment),
     mathCmds :: Map Text (p Command),
-    prefs :: Map Text (p Pref)
+    prefs :: Map Text (p Pref),
+    inlines :: Set (p Inline),
+    fstInlineChs :: Set Char
   }
 
 deriving instance (forall a. Show a => Show (p a), Box p) => Show (Definitions p)
 
-instance Semigroup (Definitions p) where
-  (Definitions a b c) <> (Definitions a' b' c') =
-    Definitions (a <> a') (b <> b') (c <> c')
+instance Box p => Semigroup (Definitions p) where
+  (Definitions a b c d e) <> (Definitions a' b' c' d' e') =
+    Definitions (a <> a') (b <> b') (c <> c') (d <> d') (e <> e')
 
-instance Monoid (Definitions p) where
-  mempty = Definitions mempty mempty mempty
+instance Box p => Monoid (Definitions p) where
+  mempty = Definitions mempty mempty mempty mempty mempty
 
 data DefType = DefTEnv | DefTMathCmd | DefTPref
 
@@ -494,6 +521,13 @@ processDefs = mapM_ h
               defs {prefs = M.insert name (pref <$ pdef) prefs}
           Just ppref' ->
             tell [MultipleDecl DefTPref name (getPos pdef) (getPos ppref')]
+      DefI inline@Inline {borders} -> do
+        -- TODO add errors
+        modify $ \defs@Definitions {inlines} ->
+          defs {inlines = S.insert (inline <$ pdef) inlines}
+        let fstCh = T.head $ fst borders
+        modify $ \defs@Definitions {fstInlineChs} ->
+          defs {fstInlineChs = S.insert fstCh fstInlineChs}
 
 -- Document body
 
@@ -509,7 +543,7 @@ type ParWord = (Text, Pos)
 
 data ParEl
   = ParText [ParWord] -- List of words
-  | ParFormula [ParWord]
+  | ParInline Inline [ParWord]
   deriving (Show)
 
 pDocument :: Box p => Definitions p -> Parser [DocElement]
@@ -523,7 +557,7 @@ pElement enPref defs =
   choice $
     [pPrefLineEnvironment defs | enPref]
       <> [ pEnvironment defs,
-           pParagraph
+           pParagraph defs
          ]
 
 pPrefLineEnvironment :: Box p => Definitions p -> Parser DocElement
@@ -540,33 +574,48 @@ pPrefLineEnvironment defs@Definitions {prefs} = do
   els <- if grouping then block pel else (: []) <$> pel
   return $ DocPrefGroup pref els
 
-pParagraph :: Parser DocElement
-pParagraph = DocParagraph <$> block pParLine
+pParagraph :: Box p => Definitions p -> Parser DocElement
+pParagraph defs = DocParagraph <$> block (pParLine defs)
 
-smbl :: Char -> Bool
-smbl = (`notElem` ['`', '\r', '\n', '%', ' '])
+smbl :: Set Char -> Char -> Bool
+smbl fstInlineChs = (`notElem` S.union fstInlineChs (S.fromList ['\r', '\n', '%', ' ']))
 
-pWord :: Parser ParWord
-pWord = withPos $ takeWhile1P Nothing smbl
+pWord :: Set Char -> Parser ParWord
+pWord fstInlineChs = withPos $ takeWhile1P Nothing $ smbl fstInlineChs
 
 pForm :: Parser [ParWord]
 pForm =
-  char '`' *> sc *> many (pWord <* sc) <* char '`'
+  char '`' *> sc *> many (pWord S.empty <* sc) <* char '`'
     <?> "Inline formula"
 
-pParLine :: Parser [ParEl]
-pParLine = notFollowedBy (string "@") *> someTill pEl (try $ sc <* eol)
+pInline :: Box p => Definitions p -> Parser ParEl
+pInline Definitions {inlines} = choice $ h . unBox <$> S.toList inlines
   where
-    pEl =
-      ParFormula <$> pForm
-        <|> ParText <$> pText
-        <|> ParText <$> pEmptyText
+    h :: Inline -> Parser ParEl
+    h inl@Inline {borders = (beg, end)} =
+      ParInline inl
+        <$> ( string beg *> sc
+                *> many (pWord (S.singleton $ T.head end) <* sc)
+                <* string end
+            )
+
+pParLine :: Box p => Definitions p -> Parser [ParEl]
+pParLine defs@Definitions {fstInlineChs} =
+  notFollowedBy (string "@") *> someTill pEl (try $ sc <* eol)
+  where
+    pEl = do
+      ch <- lookAhead anySingle
+      if ch `S.member` fstInlineChs
+        then pInline defs
+        else
+          ParText <$> pText
+            <|> ParText <$> pEmptyText
     sps = (\pos -> (T.empty, (pos, pos))) <$> getSourcePos <* some (char ' ')
     pEmptyText = (: []) . first (const " ") <$> sps
     pText = label "Paragraph text" $ do
-      try $ lookAhead (optional sps *> satisfy smbl)
+      try $ lookAhead (optional sps *> satisfy (smbl fstInlineChs))
       bSp <- fmap h . maybeToList <$> optional sps
-      words <- pWord `sepBy` try (sps *> lookAhead (satisfy smbl))
+      words <- pWord fstInlineChs `sepBy` try (sps *> lookAhead (satisfy $ smbl fstInlineChs))
       eSp <- try (fmap h . maybeToList <$> optional sps <* notFollowedBy eol) <|> pure []
       return $ bSp <> words <> eSp
     h = id

@@ -21,6 +21,7 @@ import Parser
     Definitions (..),
     DocElement (..),
     Environment (..),
+    Inline (..),
     ParEl (..),
     ParWord,
     Pref (..),
@@ -89,13 +90,16 @@ processParEl :: Tries -> Bool -> ParEl -> ErrorM ParEl
 processParEl tries math el = case (math, el) of
   (False, ParText ws) ->
     el <$ mapM checkAscii ws
-  (False, ParFormula ws) ->
-    let ws' = first (texMath tries) <$> ws
-     in ParFormula <$> mapM checkAscii ws'
+  (False, ParInline inl@Inline {innerMath} ws) ->
+    let ws' =
+          if innerMath
+            then first (texMath tries) <$> ws
+            else ws
+     in ParInline inl <$> mapM checkAscii ws'
   (True, ParText ws) ->
     let ws' = first (texMath tries) <$> ws
      in ParText <$> mapM checkAscii ws'
-  (True, ParFormula ws) -> do
+  (True, ParInline Inline {} ws) -> do
     -- TODO: Make it without possible exceptions!!!!!
     let (_, (p1, _)) = head ws
         (_, (_, p2)) = last ws
