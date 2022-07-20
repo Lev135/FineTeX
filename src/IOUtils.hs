@@ -3,6 +3,11 @@
 {-# LANGUAGE NoImplicitPrelude #-}
 {-# OPTIONS_GHC -Wno-all #-}
 
+{-
+  With great respect to @circular-ruin from stack overflow  
+  https://stackoverflow.com/questions/10779149/unicode-console-i-o-in-haskell-on-windows/10779150#10779150
+-}
+
 module IOUtils
   ( IOUtils.interact,
     IOUtils.putChar,
