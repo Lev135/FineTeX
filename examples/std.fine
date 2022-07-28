@@ -1,0 +1,25 @@
+@Import "math-primitives.fine"
+
+@Define
+  @Modes
+    Normal
+  @In Normal
+    @Environments
+      Document       = @TexBeginEnd "document"
+      Equation       = @TexBeginEnd "equation" @InnerMode Math @NoPrefInside
+      Section    (name : String) = @Begin "\section{" name "}"
+      Subsection (name : String) = @Begin "\subsection{" name "}"
+      Tex            = @Verb
+
+    @Prefs
+      >              = @TexBeginEnd "align*"    @InnerMode Math  @Sep "\\" @NoPrefInside
+      -              = @TexBeginEnd "itemize"   @Pref "\item"
+      #              = @TexBeginEnd "enumerate" @Pref "\item"
+    @Inlines
+      ` ` = @Begin "$" @End "$" @InnerMode Math
+
+  @In Math
+    @Commands
+      <=           = "\leq"
+      >=           = "\geq"
+      !=           = "\neq"

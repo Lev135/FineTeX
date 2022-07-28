@@ -1,0 +1,80 @@
+@Import "std.fine"
+
+@Define
+  @In Math
+    @Commands
+      <>           =  "\\Diamond" 
+      []           =  "\\Box"
+
+% That were blocks (environments) of definitions and imports. 
+% They should be in front of all the contents of the file
+% Only definitions are imported from import files 
+
+% TeX environment can be used to insert TeX commands verbatim in output code 
+@Tex
+  \documentclass[12pt,a4paper,oneside]{article}
+  \usepackage[utf8]{inputenc}
+  \usepackage{amsmath}
+  \usepackage{amssymb}
+  % This comment will be in output
+
+
+@Document % Everything below 2 spaces-indented will be in \begin{document} .. \end{document}
+  @Section "Basics"
+    Basic elements of these language are Paragraphs, Environments and Prefs
+
+    @Subsection "Paragraphs"
+      Paragraphs here, as well as in TeX are separated by empty lines:   
+      
+      This is a simple paragraph
+      Which continues at the next line
+
+      And this is the next paragraph
+    
+    @Subsection "Environments"
+    
+    @Subsection "Prefs"
+
+
+  @Section "Lists" 
+    \texttt{@Prefs} style is very useful for items.
+    Note that prefs should be indented more then surrounding paragraphs
+      - enumerate (this text is in paragraph inside an item
+        so it can be continued on the next line):
+          # one (it should be more indented then paragraph)
+          # two
+          # three
+      - itemize:
+          - one
+          - two
+          - three
+
+    Consecutive elements of the list are framed by the itemize/enumerate environment,
+    iff there are no empty lines between them. So:
+      # one
+      # two
+      # three
+
+      # one again
+      # two
+  
+  @Section "Math"
+    Inline math can be inserted in paragraph in back quotes: `a + b = c` 
+    --- this is inline math
+
+    For block math \texttt{@Prefs} syntax is used: 
+      > a + b = c 
+    Next lines will be framed by align* environment and \verb.\\.%
+    % \verb is used here to escape LaTeX compilation errors 
+    % '%' two lines above is to prevent splitting paragraph on two parts by this comment
+    will be added between them automatically
+      > a + b     &= c
+      > (a + b)^2 &= d
+
+      > a + b + c &= 0
+    Note that the last equation will framed by separate align*, because
+    there is an empty line before it. 
+
+  To be continued...
+  @Section "Known bugs and strange features"
+    There is nothing here at this moment
