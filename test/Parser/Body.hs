@@ -9,6 +9,7 @@ module Parser.Body where
 
 import Control.Monad.Reader (ReaderT (..))
 import Control.Monad.State (evalState, evalStateT)
+import Data.Functor.Identity (Identity (Identity, runIdentity))
 import Data.String (IsString (..))
 import Data.Text (Text, unpack)
 import qualified Data.Text as T
@@ -27,10 +28,9 @@ import Text.Megaparsec.Char (string)
 import Text.RawString.QQ (r)
 
 defs :: Definitions
-defs = case runParseT $ parseDefSource (\_ _ -> Just $ Right (txt, undefined)) undefined "" of
-  Just (Right defs) -> defs
-  Just (Left e) -> error $ unpack e
-  _ -> undefined
+defs = case runIdentity $ runParseT $ parseDefSource (\_ _ -> Identity $ Right (txt, undefined)) undefined "" of
+  Right defs -> defs
+  Left e -> error $ unpack e
   where
     txt =
       [r|
@@ -56,9 +56,9 @@ defs = case runParseT $ parseDefSource (\_ _ -> Just $ Right (txt, undefined)) u
 
   @In Math
     @Commands
-      <=           = "\leq"
-      >=           = "\geq"
-      !=           = "\neq"
+      "<="           = "\leq"
+      ">="           = "\geq"
+      "!="           = "\neq"
     @Inlines
       ?? ?? = @Begin "\text{" @End "}" @InnerMode Normal
 |]

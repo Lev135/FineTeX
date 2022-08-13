@@ -3,6 +3,7 @@
 module FineTeX.Parser.Definitions where
 
 import Control.Applicative (Alternative (..), optional)
+import Control.Monad.Combinators.Expr
 import Data.Functor (($>))
 import Data.Maybe (fromMaybe)
 import Data.Text (Text)
@@ -13,7 +14,7 @@ import FineTeX.Parser.Syntax
 import FineTeX.Parser.Utils
 import FineTeX.Utils (Box (..))
 import Text.Megaparsec (MonadParsec (..), Parsec, choice, option, (<?>))
-import Text.Megaparsec.Char (string)
+import Text.Megaparsec.Char (char, string)
 import qualified Text.Megaparsec.Char.Lexer as L
 import Prelude hiding (Word)
 
@@ -43,7 +44,7 @@ pDefInModeBlock = L.indentBlock scn $ do
   name <- strLexeme "@In" *> pIdentifierL <?> "@In <ModeName>"
   return $
     L.IndentMany Nothing (pure . DefInModeBlock name) $
-      choice [pDefEnvBlock name, pDefCmdBlock, pDefPrefBlock name, pDefInlBlock name]
+      choice [pDefEnvBlock name, pDefRuleBlock, pDefPrefBlock name, pDefInlBlock name]
 
 pDefEnvBlock :: Posed Text -> Parser (DefInModeBlock Posed)
 pDefEnvBlock mode = inEnvironment "Environments" DefEnvBlock $ do
@@ -71,12 +72,12 @@ pDefEnvBlock mode = inEnvironment "Environments" DefEnvBlock $ do
       return (beginEnd, inner)
   return DefEnvironment {..}
 
-pDefCmdBlock :: Parser (DefInModeBlock Posed)
-pDefCmdBlock = inEnvironment "Commands" DefCmdBlock $ do
-  _name <- pStringLiteralL
+pDefRuleBlock :: Parser (DefInModeBlock Posed)
+pDefRuleBlock = inEnvironment "Commands" DefRuleBlock $ do
+  _match <- pPatMatchExp
   strLexeme "="
-  _val <- pWords
-  return DefCommand {..}
+  _rule <- pRuleTerms
+  return DefRule {..}
 
 pDefPrefBlock :: Posed Text -> Parser (DefInModeBlock Posed)
 pDefPrefBlock mode = inEnvironment "Prefs" DefPrefBlock $ do
@@ -86,9 +87,9 @@ pDefPrefBlock mode = inEnvironment "Prefs" DefPrefBlock $ do
   ((_begin, _end), _pref, _suf, _sep, _innerModeName, _noPrefInside, _grouping, _oneLine) <-
     pOpt $ do
       beginEnd <- pBeginEndOpt
-      pref <- option [] (mkOptP "Pref" pWords)
-      suf <- option [] (mkOptP "Suf" pWords)
-      sep <- option [] (mkOptP "Sep" pWords)
+      pref <- option [] (mkOptP "Pref" pRuleTerms)
+      suf <- option [] (mkOptP "Suf" pRuleTerms)
+      sep <- option [] (mkOptP "Sep" pRuleTerms)
       mode <- option mode (mkOptP "InnerMode" pIdentifierL)
       noPref <- flagOpt "NoPrefInside"
       grouping <- not <$> flagOpt "NoGroup"
@@ -123,44 +124,109 @@ pOpt = toParsec (unBox <$> optNameP) optArgsConsumer
     optNameP = try (string "@" >> pIdentifierL) <?> "option name `@<name>`"
     optArgsConsumer = takeWhileP Nothing (`notElem` ['@', '\n', '\r', '%'])
 
-pWords :: Parser [Word Posed]
-pWords = many pWord
+{-}
+ppPatMatchExp :: forall p. Box p => PatMatchExp p -> Text
+ppPatMatchExp PatMatchExp {_behind, _current, _ahead} =
+  T.unwords [toStr _behind, toStr _current, toStr _ahead]
+  where
+    toStr :: [PatMatchEl p] -> Text
+    toStr = T.intercalate " " . map toStrEl
 
-pWord :: Parser (Word Posed)
-pWord =
-  choice
-    [ WSpace <$ strLexeme "_",
-      WString <$> pStringLiteralL,
-      WWord <$> pWordL
-    ]
+    toStrEl :: PatMatchEl p -> Text
+    toStrEl (PatMatchEl var se) = case var of
+      Just v -> "(" <> unBox v <> " : " <> sortToStr se <> ")"
+      Nothing -> sortToStr se
 
-pBeginEndOpt :: OptParser ([Word Posed], [Word Posed])
+    sortToStr :: SortExp p -> Text
+    sortToStr = \case
+      SEString s -> "\"" <> unBox s <> "\""
+      SESpace -> "_"
+      SESort sortName -> unBox sortName
+      SEConcat s1 s2 -> brac s1 (sortToStr s1) <> " " <> brac s2 (sortToStr s2)
+      SEOr s1 s2 -> sortToStr s1 <> " | " <> sortToStr s2
+
+    brac (SEOr _ _) = \str -> "(" <> str <> ")"
+    brac _ = id
+-}
+pPatMatchExp :: Parser (PatMatchExp Posed)
+pPatMatchExp = do
+  _behind <- option SEEmpty h
+  _current <- many pPatMatchEl
+  _ahead <- option SEEmpty h
+  return $ PatMatchExp {..}
+  where
+    h =
+      SESpace <$ strLexeme "_"
+        <|> strLexeme "?"
+          *> ( try pSortExp
+                 <|> strLexeme "(" *> pSortExp <* strLexeme ")"
+             )
+
+pPatMatchEl :: Parser (PatMatchEl Posed)
+pPatMatchEl = try pSimple <|> pBracet
+  where
+    pSimple = PatMatchEl Nothing <$> pSortExp
+    pBracet = do
+      strLexeme "("
+      _var <- Just <$> pIdentifierL
+      strLexeme ":"
+      _sort <- pSortExp
+      strLexeme ")"
+      return PatMatchEl {..}
+
+pSortExp :: Parser (SortExp Posed)
+pSortExp = makeExprParser pTerm operators
+  where
+    pTerm :: Parser (SortExp Posed)
+    pTerm =
+      SEString <$> pStringLiteralL
+        <|> SESpace <$ strLexeme "_"
+        <|> SESort <$> pIdentifierL
+        <|> strLexeme "(" *> pSortExp <* strLexeme ")"
+    operators :: [[Operator Parser (SortExp Posed)]]
+    operators =
+      [ [InfixL (SEConcat <$ notFollowedBy (char '|'))],
+        [InfixL (SEOr <$ strLexeme "|")]
+      ]
+
+pRuleTerms :: Parser [RuleTerm Posed]
+pRuleTerms = many pRuleTerm
+
+pRuleTerm :: Parser (RuleTerm Posed)
+pRuleTerm =
+  RTString <$> pStringLiteralL
+    <|> RTVar <$> pIdentifierL
+    <|> RTSpace <$ strLexeme "_"
+    <|> RTRun <$> (strLexeme "!" *> optional pIdentifierL) <*> pBrackets
+  where
+    pBrackets = char '(' *> some pRuleTerm <* char ')' <|> (: []) <$> pRuleTerm
+
+pBeginEndOpt :: OptParser ([RuleTerm Posed], [RuleTerm Posed])
 pBeginEndOpt = option ([], []) $ texBEP <||> simpleBEP <??> ["@TexBeginEnd", "@Begin @End"]
   where
-    texBEP :: OptParser ([Word Posed], [Word Posed])
     texBEP = do
       texName <- mkOptP "TexBeginEnd" pStringLiteralL
-      return ([WString $ beg <$> texName], [WString $ end <$> texName])
+      return ([RTString $ beg <$> texName], [RTString $ end <$> texName])
     beg n = "\\begin{" <> n <> "}"
     end n = "\\end{" <> n <> "}"
     simpleBEP = do
-      begin <- option [] $ mkOptP "Begin" pWords
-      end <- option [] $ mkOptP "End" pWords
+      begin <- option [] $ mkOptP "Begin" pRuleTerms
+      end <- option [] $ mkOptP "End" pRuleTerms
       case (begin, end) of
         ([], []) -> empty
         _ -> return (begin, end)
 
-pArgKind :: Parser ArgKind
+pArgKind :: Parser (ArgKind Posed)
 pArgKind =
   AKString <$ strLexeme "String"
-    <|> AKWord <$ strLexeme "Word"
-      <?> "argument type `String` | `Word`"
+    <|> AKSort <$> pSortExp
+      <?> "argument kind 'String' or sort expression"
 
 pDefArgs :: Parser [Argument Posed]
-pDefArgs = many . label "argument `(<name> : <type>)`" $ do
+pDefArgs = many . label "argument `(<name> : <kind>)`" $ do
   try $ strLexeme "("
   _name <- pIdentifierL
   strLexeme ":"
-  _kind <- withPos pArgKind
+  _kind <- pArgKind
   strLexeme ")"
   return Argument {..}

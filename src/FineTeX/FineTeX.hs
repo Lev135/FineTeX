@@ -49,7 +49,8 @@ import FineTeX.Parser.Syntax (DocElement, Word)
 import FineTeX.Parser.Utils (Posed)
 import FineTeX.Printer (Ann (..), PrefTabMode (..), PrintOpts (..), prettyDoc)
 import FineTeX.Processor.Body (Word', WordDocElement, bodyToWords, processBody, wordsToWords')
-import FineTeX.Processor.Definitions (ProcessDefsError, processDefs)
+import FineTeX.Processor.Definitions (ProcessDefsError, initState, processDefs)
+import qualified FineTeX.Processor.Definitions as ProcDefs
 import qualified FineTeX.Processor.Syntax
 import FineTeX.Utils (Box (..), Pos, PosC (..), PrettyErr (..), Sources, prettyPos, renderErrors, withError)
 import qualified Prettyprinter as P
@@ -236,7 +237,7 @@ parseDefsImpl readFile base fileName = do
     defs' <- liftEither $ first ParseError mdefs'
     return (defs', state'')
   defs'' <- do
-    let (errs, defs'') = flip runState defs . execWriterT $ processDefs defs'
+    let (errs, ProcDefs.State {_definitions = defs''}) = flip runState (initState defs) . execWriterT $ processDefs defs'
     case errs of
       [] -> return defs''
       _ -> throwError $ ProcessError errs

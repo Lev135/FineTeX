@@ -1,3 +1,4 @@
+{-# LANGUAGE PartialTypeSignatures #-}
 {-# LANGUAGE StandaloneDeriving #-}
 {-# OPTIONS_GHC -Wno-incomplete-uni-patterns #-}
 
@@ -10,12 +11,11 @@ import Control.Monad.RWS (MonadReader, MonadState (get, put), MonadWriter)
 import Data.List.Extra (intercalate, repeatedly)
 import qualified Data.Map as M
 import Data.Maybe (fromMaybe)
-import qualified Data.Set as S
 import Data.Text (Text)
 import qualified Data.Text as T
 import FineTeX.Parser.Syntax
 import FineTeX.Processor.Syntax
-import FineTeX.Processor.Tokenizer (Token (..), makeTokenizeMap, tokenize)
+import FineTeX.Processor.Tokenizer (tokenize)
 import FineTeX.Utils (Box (unBox), localState, spanMaybe)
 import Prelude hiding (Word)
 
@@ -30,9 +30,9 @@ type MonadM m p =
 data WordDocElement word p
   = -- | ~ 'GDocParagraph'
     WDocParagraph [word p]
-  | -- | First block containes @\@Begin@ option, last --- @\@End@
+  | -- | First block contains @\@Begin@ option, last --- @\@End@
     WDocEnvironment ModeName [word p] (EnvBody (WordDocElement word) p) [word p]
-  | -- | First block containes @\@Pref@ option, last --- @\@Suff@ and
+  | -- | First block contains @\@Pref@ option, last --- @\@Suff@ and
     -- (for every pref item, excluding last) @\@Sep@
     WDocPrefItem [word p] [WordDocElement word p] [word p]
   | -- | ~'GDocEmptyLine'
@@ -134,8 +134,8 @@ elToWord = \case
   GDocEnvironment name argvs body -> do
     defs <- curModeDefs
     let env = defs ^. envs . at (unBox name) . non (error "unexpected env")
-        beg' = substArgs (env ^. args) argvs (env ^. begin)
-        end' = substArgs (env ^. args) argvs (env ^. end)
+        beg' = substArgs' (env ^. args) argvs (env ^. begin)
+        end' = substArgs' (env ^. args) argvs (env ^. end)
     state <- get
     let mode = fromMaybe state $ env ^? inner . _NoVerb . innerModeName . to unBox
     body' <- localState $ do
@@ -147,14 +147,19 @@ elToWord = \case
     let pref = defs ^. prefs . at (unBox name) . non (error "unexpected pref")
     let mode = pref ^. innerModeName . to unBox
     let mkWords (isLast, (argvs, els)) = do
-          let beg' = substArgs (pref ^. args) argvs (pref ^. FineTeX.Parser.Syntax.pref)
-              end' = substArgs (pref ^. args) argvs (pref ^. suf <> if isLast then [] else pref ^. sep)
+          let beg' = substArgs' (pref ^. args) argvs (pref ^. FineTeX.Parser.Syntax.pref)
+              end' = substArgs' (pref ^. args) argvs (pref ^. suf <> if isLast then [] else pref ^. sep)
           els' <- mapM elToWord els
           return $ WDocPrefItem beg' els' end'
     items' <- localState $ do
       put mode
       mapM mkWords (zipWith (\i el -> (i == length items, el)) [1 ..] items)
-    return $ WDocEnvironment mode (pref ^. begin) (NoVerbBody items') (pref ^. end)
+    return $
+      WDocEnvironment
+        mode
+        (pref ^. begin . to (substArgs' [] []))
+        (NoVerbBody items')
+        (pref ^. end . to (substArgs' [] []))
   GDocEmptyLine -> return WDocEmptyLine
 
 parElToWords :: MonadM m p => ParEl p -> m [Word p]
@@ -170,17 +175,51 @@ parElToWords = \case
     parEls' <- localState $ do
       put mode
       mapM parElToWords parEls
-    return [WMode mode $ inl ^. begin <> [WGroup $ join parEls'] <> inl ^. end]
+    return
+      [ WMode mode $
+          inl ^. begin . to (substArgs' [] [])
+            <> [WGroup $ join parEls']
+            <> inl ^. end . to (substArgs' [] [])
+      ]
 
-substArgs :: Box p => [Argument p] -> [ArgVal p] -> [Word p] -> [Word p]
-substArgs args argvs = concatMap repl
+-- | Term of the right part of rules, sections of prefs and envs
+data RuleTerm' p
+  = -- | String constant
+    RTString' (p Text)
+  | -- | Space symbol
+    RTSpace'
+  | -- | Rule terms need to be processed in particular mode
+    -- (if Nothing, current mode is used)
+    RTRun' (Maybe (p ModeName)) [RuleTerm' p]
+
+substArgs' :: Box p => [Argument p] -> [ArgVal p] -> [RuleTerm p] -> [Word p]
+substArgs' args argvs = map ruleTerm'ToWord . substArgs args argvs
+
+substArgs :: forall p. Box p => [Argument p] -> [ArgVal p] -> [RuleTerm p] -> [RuleTerm' p]
+substArgs args argvs = map repl
   where
     replMap = M.fromList $ zip ((\Argument {_name} -> unBox _name) <$> args) argvs
-    repl w@(WWord n) = case M.lookup (unBox n) replMap of
-      Nothing -> [w]
-      Just (AVString s) -> [WString s]
-      Just (AVWord s) -> [WWord s]
-    repl w = [w]
+    repl :: RuleTerm p -> RuleTerm' p
+    repl = \case
+      RTString s -> RTString' s
+      RTVar varName -> case M.lookup (unBox varName) replMap of
+        Nothing -> error $ "Unexpected varriable " <> show varName -- TODO: fix it
+        Just (AVString s) -> RTString' s
+        Just (AVSort _) -> error "Sort arguments not realized yet" -- TODO: fix it
+      RTSpace -> RTSpace'
+      RTRun mode rts -> RTRun' mode (repl <$> rts)
+
+ruleTerm'ToWord :: Box p => RuleTerm' p -> Word p
+ruleTerm'ToWord = \case
+  RTString' s -> WString s
+  RTSpace' -> WSpace
+  RTRun' Nothing rts -> WGroup (h <$> rts)
+  RTRun' (Just mode) rts -> WMode (unBox mode) (h <$> rts)
+  where
+    h = \case
+      RTString' s -> WWord s
+      RTSpace' -> WSpace
+      RTRun' _ _ -> error "Unexpected run" -- TODO: fix it
 
 curModeDefs :: MonadM m p => m (InModeDefs p)
 curModeDefs = do
@@ -205,20 +244,19 @@ elReplaceTokens = \case
     return $ WDocPrefItem bws' els' ews'
   WDocEmptyLine -> return WDocEmptyLine
 
-replaceTokens :: MonadM m p => Word p -> m [Word' p]
+replaceTokens :: forall m p. MonadM m p => Word p -> m [Word' p]
 replaceTokens = \case
   WString s -> pure [WString' s]
   WWord w -> do
     defs <- curModeDefs
-    let commands = defs ^. cmds
-        x = M.keys commands
-        toks = map (\name -> Token {name, body = S.singleton <$> T.unpack name, behind = [], ahead = []}) x
-        m = makeTokenizeMap toks
-    ws' <- case tokenize m (T.unpack $ unBox w) of
+    let rls = defs ^. rules
+    ws' <- case tokenize (defs ^. tokMap) (T.unpack $ unBox w) of
       Left _ ->
-        pure [WString w] --tell [es] >> pure []
-      Right curTokNames ->
-        pure $ concatMap ((\DefCommand {_val} -> _val) . (commands M.!)) curTokNames
+        pure []
+      --     pure [WString w] --tell [es] >> pure []
+      Right replMaps ->
+        pure $ concatMap (\(i, m) -> concatMap (repl m) (rls M.! i)) replMaps
+    --     pure $ (\(i, replMap) -> map (subst replMap) (rls ^?! ix i)) =<< replMaps
     join <$> mapM replaceTokens ws'
   WSpace -> pure [WSpace']
   WMode mode ws -> localState $ do
@@ -226,4 +264,18 @@ replaceTokens = \case
     join <$> mapM replaceTokens ws
   WGroup ws -> do
     ws' <- join <$> mapM replaceTokens ws
-    return ws' -- [WGroup' ws']
+    return [WGroup' ws']
+  where
+    repl :: M.Map VarName String -> RuleTerm p -> [Word p]
+    repl m = \case
+      RTString ps -> [WString ps]
+      RTVar pv -> [WString (T.pack . (m M.!) <$> pv)]
+      RTSpace -> [WSpace]
+      RTRun _ _ -> error "Run non realized"
+
+subst :: Box p => M.Map VarName String -> RuleTerm p -> Word p
+subst substMap = \case
+  RTString s -> WString s
+  RTVar var -> WString (T.pack . (substMap M.!) <$> var)
+  RTSpace -> WSpace
+  RTRun _ _ -> error "Not realized" -- TODO: realize it

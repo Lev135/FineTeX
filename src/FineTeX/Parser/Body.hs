@@ -175,17 +175,17 @@ pInline = do
 
 -- | Parse argument value: this will be changed soon
 pArgV :: ParserM m p => Argument p -> m (ArgVal Posed)
-pArgV arg = label (prettyArg arg) $ case arg ^. kind . to unBox of
+pArgV arg = label (prettyArg arg) $ case arg ^. kind of
   AKString -> AVString <$> pStringLiteralL
-  AKWord -> AVWord <$> pWordL
+  AKSort _ -> AVSort <$> pWordL
 
 prettyArg :: Box p => Argument p -> String
 prettyArg arg = "(" <> nameS <> " : " <> typeS <> ")"
   where
     nameS = arg ^. name . to (T.unpack . unBox)
-    typeS = case arg ^. kind . to unBox of
+    typeS = case arg ^. kind of
       AKString -> "String"
-      AKWord -> "Word"
+      AKSort _ -> "Word"
 
 -- | Parse environment body in verb mode,
 -- i. e. zero or more lines with greater than ind0 indentation or empty lines.

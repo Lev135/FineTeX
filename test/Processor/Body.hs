@@ -15,7 +15,7 @@ import qualified Data.Text as T
 import FineTeX.Parser.Syntax (DocElement (..), EnvBody (NoVerbBody), WordOrSpace (..))
 import FineTeX.Parser.Utils (Posed (..))
 import FineTeX.Processor.Body
-import FineTeX.Processor.Tokenizer (BlackWhiteSet (..), Token (..), makeTokenizeMap, tokenize)
+import FineTeX.Processor.Tokenizer (BlackWhiteSet (..), Token (..), TokenizeError (..), makeTokenizeMap, tokenize)
 import GHC.Exts (IsList (..))
 import Test.Hspec (SpecWith, describe, it, shouldBe)
 
@@ -33,8 +33,8 @@ instance IsList (BlackWhiteSet Char) where
   fromList = WhiteSet . S.fromList
   toList = undefined
 
-tok :: String -> ([BlackWhiteSet Char], [S.Set Char], [BlackWhiteSet Char]) -> Token String Char
-tok name (behind, body, ahead) = Token {name, body, behind, ahead}
+tok :: String -> ([BlackWhiteSet Char], [S.Set Char], [BlackWhiteSet Char]) -> Token String Char String
+tok name (behind, body, ahead) = Token {name, body, behind, ahead, postProc = id}
 
 spec :: SpecWith ()
 spec = do
@@ -91,18 +91,19 @@ spec = do
     it "Two chars" $
       tokenize (m ["a", "b"]) "ab" `shouldBe` Right ["a", "b"]
     it "Two char with or" $
-      tokenize (m ["a|b"]) "ab" `shouldBe` Right ["a|b", "a|b"]
+      tokenize (m ["a|b"]) "ab" `shouldBe` Right ["a", "b"]
     it "Two char with or" $
-      tokenize (m ["a|b", "c"]) "ac" `shouldBe` Right ["a|b", "c"]
+      tokenize (m ["a|b", "c"]) "ac" `shouldBe` Right ["a", "c"]
     it "a, ab  vs  aba" $
       tokenize (m ["a", "ab"]) "aba" `shouldBe` Right ["ab", "a"]
     it "a, ab  vs  abaabab" $
       tokenize (m ["a", "ab"]) "abaabab" `shouldBe` Right ["ab", "a", "ab", "ab"]
     it "Char fail" $
-      tokenize (m ["a"]) "x" `shouldBe` Left [[]]
+      tokenize (m ["a"]) "x" `shouldBe` Left (NoWayTokenize 0 [])
     it "Char fail" $
-      tokenize (m ["a", "a|b"]) "x" `shouldBe` Left [[]]
+      tokenize (m ["a", "a|b"]) "x" `shouldBe` Left (NoWayTokenize 0 [])
     it "Two chars fail" $
-      tokenize (m ["a"]) "ax" `shouldBe` Left [["a"]]
+      tokenize (m ["a"]) "ax" `shouldBe` Left (NoWayTokenize 1 [("a", "a")])
     it "Many chars fail" $
-      tokenize (m ["a"]) "aaax" `shouldBe` Left [["a", "a", "a"]]
+      tokenize (m ["a"]) "aaax"
+        `shouldBe` Left (NoWayTokenize 3 [("a", "a"), ("a", "a"), ("a", "a")])

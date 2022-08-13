@@ -3,8 +3,8 @@
 @Define
   @In Math
     @Commands
-      <>           =  "\\Diamond" 
-      []           =  "\\Box"
+      "<>"           =  "\\Diamond" 
+      "[]"           =  "\\Box"
 
 % That were blocks (environments) of definitions and imports. 
 % They should be in front of all the contents of the file

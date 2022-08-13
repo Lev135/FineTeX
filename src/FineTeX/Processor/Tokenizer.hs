@@ -1,68 +1,119 @@
+{-# LANGUAGE KindSignatures #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE PartialTypeSignatures #-}
+{-# LANGUAGE StarIsType #-}
+
 module FineTeX.Processor.Tokenizer
   ( BlackWhiteSet (..),
+    BlackWhiteSetList,
+    singleton,
+    fromConcrete,
+    filterSet,
+    member,
+    intersection,
     Token (..),
     ConflictTokens,
     checkUniqueTokenizing,
     TokenizeMap,
+    TokenizeError (..),
     makeTokenizeMap,
     tokenize,
-    revToken,
-    isAcceptable,
   )
 where
 
 import Control.Monad (guard, when)
+import Control.Monad.State (State, evalState, gets)
 import Data.Bifunctor (Bifunctor (..))
+import Data.Foldable (foldrM)
+import Data.Function (on)
+import Data.IntMap (IntMap)
+import qualified Data.IntMap as IM
 import Data.Map (Map)
 import qualified Data.Map as M
-import Data.Maybe (catMaybes, maybeToList)
+import Data.Maybe (catMaybes, fromMaybe, mapMaybe, maybeToList)
 import Data.Set (Set)
 import qualified Data.Set as S
+import Safe.Exact (splitAtExactMay)
+
+-- * 'BlackWhiteSet' and 'Token' data types and utilities
 
 -- | Set of acceptable ('WhiteSet') or not acceptable ('BlackSet') chars
 data BlackWhiteSet c = WhiteSet (Set c) | BlackSet (Set c)
   deriving (Eq, Ord, Show)
 
+-- | Alias for lists of 'BlackWhiteSet's
+type BlackWhiteSetList c = [BlackWhiteSet c]
+
+-- | Make 'BlackWhiteSet' accepting only this symbol
+singleton :: c -> BlackWhiteSet c
+singleton = WhiteSet . S.singleton
+
+-- | Make 'BlackWhiteSetList' accepting only this string
+fromConcrete :: [c] -> BlackWhiteSetList c
+fromConcrete = map singleton
+
+-- | Filter elements from 'Set' acceptable by the 'BlackWhiteSet'
 filterSet :: Ord c => BlackWhiteSet c -> Set c -> Set c
 filterSet (WhiteSet ws) = S.intersection ws
 filterSet (BlackSet bs) = (`S.difference` bs)
 
+-- | Check if this symbol is acceptable by the 'BlackWhiteSet'
 member :: Ord c => c -> BlackWhiteSet c -> Bool
 member c (WhiteSet ws) = S.member c ws
 member c (BlackSet bs) = S.notMember c bs
 
+-- | Intersection of two 'BlackWhiteSet's.
+-- Accepts only those symbols, that are acceptable by both arguments
 intersection :: Ord c => BlackWhiteSet c -> BlackWhiteSet c -> BlackWhiteSet c
 intersection (WhiteSet ws) (WhiteSet ws') = WhiteSet $ S.intersection ws ws'
 intersection (WhiteSet ws) (BlackSet bs') = WhiteSet $ S.difference ws bs'
 intersection (BlackSet bs) (WhiteSet ws') = WhiteSet $ S.difference ws' bs
-intersection (BlackSet bs) (BlackSet bs') = WhiteSet $ S.union bs bs'
+intersection (BlackSet bs) (BlackSet bs') = BlackSet $ S.union bs bs'
 
--- |
--- Example: Token {
---    name   = "EXAMPLE"
---    body   = [fromList ['a', 'b'], fromList ['c']],
---    behind = [WhiteSet $ fromList ['d'], BlackSet $ fromList ['e', 'f']],
---    ahead  = [BlackSet $ fromList ['g']]
--- }
--- accepts strings "ab" and "ac" and also parts of strings
+-- | 'k' --- type of token's name
+-- 'c' --- type of symbols to be tokenized
+-- 'r' --- type of result of tokenizing (if tokenizing succeeds,
+-- 'postProc' function is called on **body** to achieve result)
+--
+-- Example:
+--
+-- @
+--   Token {
+--      body   = [fromList ['a', 'b'], fromList ['c']],
+--      behind = [WhiteSet $ fromList ['d'], BlackSet $ fromList ['e', 'f']],
+--      ahead  = [BlackSet $ fromList ['g']],
+--      postProc = id
+--   }
+-- @
+-- accepts strings "ac" and "bc" and also parts of strings
 -- "d2ac3" ("ac"), "0d2bc" ("bc"), "2bc345" ("bc")
 -- where numbers indicate arbitrary symbols, @2 /= e@, @2 /= f@, @3 /= g@
-data Token k c = Token
-  { -- | unique name of token
+data Token k c r = Token
+  { -- | Name of token. Used in error messages
     name :: k,
-    -- | list of sets of acceptable elements on each position
     body :: [Set c],
-    -- | list of sets of NOT acceptable elements on each position before/after token
-    behind, ahead :: [BlackWhiteSet c]
+    behind, ahead :: BlackWhiteSetList c,
+    -- | Function to be applied after tokenizing to achieve result \\
+    -- **NB! Only 'body' symbols are given as argument to this function**
+    postProc :: [c] -> r
   }
-  deriving (Eq, Ord, Show)
 
-data RToken k c = RToken
-  { name :: k,
+-- * Checking tokenize uniqueness
+
+type TokId = Int
+
+data RToken c = RToken
+  { tokId :: TokId,
     body :: [Set c],
     rbehind, ahead :: [BlackWhiteSet c]
   }
-  deriving (Eq, Ord, Show)
+  deriving (Show)
+
+instance Eq (RToken c) where
+  (==) = (==) `on` (\RToken {tokId} -> tokId)
+
+instance Ord (RToken c) where
+  compare = compare `on` (\RToken {tokId} -> tokId)
 
 data Suff c = Suff
   { rbehind :: [Set c],
@@ -71,8 +122,8 @@ data Suff c = Suff
   }
   deriving (Eq, Ord, Show)
 
-data PatDiv k c = PatDiv
-  { rprefPatNames, rpatNames :: [k],
+data PatDiv c = PatDiv
+  { rprefPatIds, rpatIds :: [TokId],
     suff :: Suff c
   }
   deriving (Eq, Ord, Show)
@@ -82,11 +133,11 @@ zipWithKeepRest _ [] ys = ys
 zipWithKeepRest _ xs [] = xs
 zipWithKeepRest g (x : xs) (y : ys) = g x y : zipWithKeepRest g xs ys
 
-initDiv :: RToken k cs -> PatDiv k cs
-initDiv RToken {name, body, ahead} =
+initDiv :: RToken cs -> PatDiv cs
+initDiv RToken {tokId, body, ahead} =
   PatDiv
-    { rprefPatNames = [],
-      rpatNames = [name],
+    { rprefPatIds = [],
+      rpatIds = [tokId],
       suff =
         Suff
           { rbehind = [],
@@ -102,13 +153,13 @@ initDiv RToken {name, body, ahead} =
   behind    small body         small ahead
 
   -----------------------|============|~~~~~~~~~~~~~
-       res behind          res body      res ahead
+        res behind          res body      res ahead
 -}
-divStep :: Ord c => Int -> PatDiv k c -> RToken k c -> Maybe (PatDiv k c)
+divStep :: Ord c => Int -> PatDiv c -> RToken c -> Maybe (PatDiv c)
 divStep
   maxBehind
-  PatDiv {rprefPatNames, rpatNames, suff = Suff {rbehind, body, ahead}}
-  RToken {name, body = pbody, rbehind = prbehind, ahead = pahead} =
+  PatDiv {rprefPatIds, rpatIds, suff = Suff {rbehind, body, ahead}}
+  RToken {tokId, body = pbody, rbehind = prbehind, ahead = pahead} =
     do
       let rbehind' = filterPref prbehind rbehind
       guard $ not $ any null rbehind'
@@ -125,14 +176,14 @@ divStep
               intersection
               bigAhead
               (drop (length bigBody - length smallBody) smallAhead)
-      let (rprefPatNames', rpatNames') =
+      let (rprefPatIds', rpatIds') =
             if length pbody <= length body
-              then (name : rprefPatNames, rpatNames)
-              else (rprefPatNames, name : rpatNames)
+              then (tokId : rprefPatIds, rpatIds)
+              else (rprefPatIds, tokId : rpatIds)
       return
         PatDiv
-          { rprefPatNames = rprefPatNames',
-            rpatNames = rpatNames',
+          { rprefPatIds = rprefPatIds',
+            rpatIds = rpatIds',
             suff =
               Suff
                 { rbehind = take maxBehind $ reverse drbehind <> rbehind',
@@ -148,72 +199,177 @@ divStep
 -- | Two sequences of tokens, that lead to the same list
 type ConflictTokens k = ([k], [k])
 
-revToken :: Token k c -> RToken k c
-revToken Token {name, body, behind, ahead} =
-  RToken {name, body, rbehind = reverse behind, ahead}
+makeRToken :: TokId -> Token k c r -> RToken c
+makeRToken tokId Token {body, behind, ahead} =
+  RToken
+    { tokId,
+      body = body,
+      rbehind = reverse behind,
+      ahead = ahead
+    }
 
 -- | Check if every list composed from the set of tokens can be uniquely decomposed into tokens
-checkUniqueTokenizing :: forall k c. (Eq k, Ord c) => [Token k c] -> Either (ConflictTokens k) ()
+checkUniqueTokenizing :: forall k c r. (Ord c) => [(k, Token k c r)] -> Either (ConflictTokens k) ()
 checkUniqueTokenizing pats =
   first (bimap reverse reverse) $
     mapM_ (h S.empty) [res | p <- rpats, p' <- rpats, p /= p', res <- maybeToList $ divStep maxBehind (initDiv p') p]
   where
-    rpats = revToken <$> pats
+    rpats = zipWith makeRToken [0 ..] (snd <$> pats)
+    getTokName tokId = fst $ pats !! tokId
     maxBehind = maximum $ (\RToken {rbehind} -> length rbehind) <$> rpats
-    h :: Set (Suff c) -> PatDiv k c -> Either (ConflictTokens k) ()
-    h olds pdiv@PatDiv {rprefPatNames, rpatNames, suff = suff@Suff {body}} = do
+    h :: Set (Suff c) -> PatDiv c -> Either (ConflictTokens k) ()
+    h olds pdiv@PatDiv {rprefPatIds, rpatIds, suff = suff@Suff {body}} = do
       when (null body) $
-        Left (rprefPatNames, rpatNames)
+        Left (getTokName <$> rprefPatIds, getTokName <$> rpatIds)
       mapM_ (h (S.insert suff olds)) $
         filter ((`S.notMember` olds) . (\PatDiv {suff} -> suff)) $
           catMaybes $ divStep maxBehind pdiv <$> rpats
 
+-- * Tokenizing
+
+data RToken' c = RToken'
+  { tokId :: TokId,
+    body :: [Set c],
+    rbehind, ahead :: [BlackWhiteSet c]
+  }
+  deriving (Eq, Ord, Show)
+
+modifyIds :: (TokId -> TokId) -> RToken' c -> RToken' c
+modifyIds f tok@RToken' {tokId} = tok {tokId = f tokId}
+
+-- makeRToken' :: (k, Token c r) -> RToken' k c
+-- makeRToken' (name, Token {body, behind, ahead}) =
+--   RToken'
+--     { name,
+--       rbody = reverse body,
+--       rbehind = reverse behind,
+--       ahead
+--     }
+
 -- | Map with data for 'tokenize' function. Should be prepared by calling
 -- 'makeTokenizeMap' function
-type TokenizeMap k c = Map c [RToken k c]
+--
+-- 'Semigroup' instance can be useful for inserting new elements
+data TokenizeMap k c r = TokenizeMap
+  { tokMap :: Map c [RToken' c],
+    procFuncs :: IntMap ([c] -> r),
+    tokNames :: IntMap k
+  }
+
+instance Show k => Show (TokenizeMap k c r) where
+  show = show . tokNames
+
+instance Ord c => Semigroup (TokenizeMap k c r) where
+  TokenizeMap tokMap' procFuncs' tokNames'
+    <> TokenizeMap tokMap'' procFuncs'' tokNames'' =
+      TokenizeMap
+        { tokMap = M.unionWith (<>) tokMap' tokMap''',
+          procFuncs = procFuncs' <> procFuncs''',
+          tokNames = tokNames' <> tokNames'''
+        }
+      where
+        len = length tokMap'
+        tokMap''' = map (modifyIds (+ len)) <$> tokMap''
+        procFuncs''' = IM.mapKeysMonotonic (+ len) procFuncs''
+        tokNames''' = IM.mapKeysMonotonic (+ len) tokNames''
+
+instance Ord c => Monoid (TokenizeMap k c r) where
+  mempty = TokenizeMap mempty mempty mempty
+
+singleTokMap :: Eq c => Token k c r -> TokenizeMap k c r
+singleTokMap Token {name, body, behind, ahead, postProc} =
+  TokenizeMap
+    { tokMap = M.fromAscList $ map (,[rtok]) $ S.toList $ head body,
+      procFuncs = IM.singleton tokId postProc,
+      tokNames = IM.singleton tokId name
+    }
+  where
+    tokId = 0
+    rtok = RToken' {tokId, body, rbehind = reverse behind, ahead}
+
+-- | Insert 'Token' into 'TokenizeMap'
+insert :: Ord c => Token k c r -> TokenizeMap k c r -> TokenizeMap k c r
+insert tok = (<> singleTokMap tok)
 
 -- | Create auxillary Map for tokenizing. Should be called once for initializing
-makeTokenizeMap :: forall k c. Ord c => [Token k c] -> TokenizeMap k c
-makeTokenizeMap = M.unionsWith (<>) . map h
-  where
-    h :: Token k c -> Map c [RToken k c]
-    h p@Token {body} = M.fromAscList $ map (,[revToken p]) $ S.toList $ head body
+makeTokenizeMap :: Ord c => [Token k c r] -> TokenizeMap k c r
+makeTokenizeMap = foldr insert mempty
+
+-- | Error during tokenizing
+data TokenizeError k c
+  = NoWayTokenize
+      Int
+      -- ^ Position of the first character that can not be tokenized
+      [(k, [c])]
+      -- ^ Part of string successfully tokenized (the longest of all attempts)
+  | TwoWaysTokenize
+      Int
+      -- ^ Length of uniquely tokenized prefix
+      [(k, [c])]
+      -- ^ First tokenize way
+      [(k, [c])]
+      -- ^ Second tokenize way
+  deriving (Show, Eq)
+
+mapTokErrKey :: (k -> k') -> TokenizeError k c -> TokenizeError k' c
+mapTokErrKey f (NoWayTokenize pos toks) =
+  NoWayTokenize pos (map (first f) toks)
+mapTokErrKey f (TwoWaysTokenize pos toks toks') =
+  TwoWaysTokenize pos (map (first f) toks) (map (first f) toks')
 
 -- | Split list of symbols on tokens.
--- Error value '[[k]]' indicates tokenizer's ways on splitting list
--- (can be used to produce error messages)
-tokenize :: forall k c. Ord c => TokenizeMap k c -> [c] -> Either [[k]] [k]
-tokenize tokMap = h []
+tokenize :: forall k c r. Ord c => TokenizeMap k c r -> [c] -> Either (TokenizeError k c) [r]
+tokenize TokenizeMap {tokMap, tokNames, procFuncs} cs =
+  bimap (mapTokErrKey (tokNames IM.!)) (map (uncurry (procFuncs IM.!))) $
+    flip evalState mempty $ h 0 [] cs
   where
-    h :: [c] -> [c] -> Either [[k]] [k]
-    h _ [] = Right []
-    h prevs curs@(c : _) = do
-      pats <- case M.lookup c tokMap of
-        Nothing -> Left []
-        Just pats -> Right pats
-      foldr h'' (Left [[]]) $ h' <$> pats
+    -- input string is split in two parts: (reversed) @prevs@ and @nexts@
+    -- @pos == length prevs@
+    -- prevs are assumed to be already processed
+    -- returns unique possible first token's result at the @pos@ position
+    h :: Int -> [c] -> [c] -> State (IntMap (Res c)) (Res c)
+    h _ _ [] = pure $ Right []
+    h pos prevs nexts@(cur : _) = do
+      -- get memorized result
+      mres <- gets $ IM.lookup pos
+      maybe acceptedToks pure mres
       where
-        h' :: RToken k c -> Either [[k]] [k]
-        h' rtok@RToken {name, body}
-          | isAcceptable rtok prevs curs =
-            bimap ((name :) <$>) (name :) $
-              h (prevs <> dprevs) curs'
-          | otherwise = Left []
-          where
-            (dprevs, curs') = splitAt (length body) curs
+        allToks :: [RToken' c]
+        allToks = fromMaybe [] $ M.lookup cur tokMap
 
-        h'' :: Either [[k]] [k] -> Either [[k]] [k] -> Either [[k]] [k]
-        h'' (Right v) _ = Right v
-        h'' _ (Right v) = Right v
-        h'' (Left e) (Left e') = Left (e <> e')
+        acceptedToks :: State (IntMap (Res c)) (Res c)
+        acceptedToks =
+          foldrM
+            ( \(tokId, len, curs, nexts') res'' -> do
+                let curTok = (tokId, curs)
+                res' <- addTok curTok <$> h (pos + len) (reverse curs <> prevs) nexts'
+                pure $ case (res', res'') of
+                  (Left TwoWaysTokenize {}, _) -> res'
+                  (_, Left TwoWaysTokenize {}) -> res''
+                  (Left NoWayTokenize {}, Right _) -> res''
+                  (Right _, Left NoWayTokenize {}) -> res'
+                  (Left (NoWayTokenize l' _), Left (NoWayTokenize l'' _)) ->
+                    if l' > l'' then res' else res''
+                  (Right toks', Right toks'') ->
+                    Left $ TwoWaysTokenize pos toks' toks''
+            )
+            ((Left $ NoWayTokenize pos []) :: Res c)
+            $ mapMaybe (accepts prevs nexts) allToks
+        addTok :: (TokId, [c]) -> Res c -> Res c
+        addTok tok = \case
+          Left (NoWayTokenize pos toks) ->
+            Left $ NoWayTokenize pos (tok : toks)
+          Left (TwoWaysTokenize len toks toks') ->
+            Left $ TwoWaysTokenize len (tok : toks) (tok : toks')
+          Right rs -> Right $ tok : rs
 
-isAcceptable :: Ord c => RToken k c -> [c] -> [c] -> Bool
-isAcceptable RToken {rbehind, body, ahead} prevs curs =
-  and
-    ( [ length body <= length curs,
-        and $ zipWith member prevs rbehind,
-        and $ zipWith S.member curs body,
-        and $ zipWith member (drop (length body) curs) ahead
-      ] ::
-        [Bool]
-    )
+        accepts :: [c] -> [c] -> RToken' c -> Maybe (TokId, Int, [c], [c])
+        accepts rprevs nexts RToken' {tokId, rbehind, body, ahead} = do
+          let len = length body
+          (curs, nexts') <- splitAtExactMay len nexts
+          mapM_ guard $ zipWith member rprevs rbehind
+          mapM_ guard $ zipWith S.member curs body
+          mapM_ guard $ zipWith member nexts' ahead
+          return (tokId, len, curs, nexts')
+
+type Res c = Either (TokenizeError TokId c) [(TokId, [c])]

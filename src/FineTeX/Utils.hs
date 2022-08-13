@@ -1,5 +1,6 @@
 {-# LANGUAGE QuantifiedConstraints #-}
 {-# LANGUAGE RankNTypes #-}
+{-# OPTIONS_GHC -Wno-redundant-constraints #-}
 
 module FineTeX.Utils where
 
@@ -13,6 +14,9 @@ import Data.Void (Void, absurd)
 import qualified Prettyprinter as P
 import qualified Prettyprinter.Render.Text as P
 import Text.Megaparsec (SourcePos (..), unPos)
+
+(.:) :: (b -> c) -> (a -> a' -> b) -> a -> a' -> c
+f .: g = fmap f . g
 
 -- | Convert a 'Maybe' value to a value in any monad
 failMsg :: MonadFail m => Maybe a -> String -> m a

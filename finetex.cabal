@@ -107,6 +107,8 @@ library
                   , containers
                   , lens
                   , template-haskell
+                  , parser-combinators
+                  , safe
 
 executable texgen
   import:           basics, exe
@@ -168,6 +170,8 @@ executable texgen-repl
                   , optparse-applicative
                   , filepath
                   , pretty-simple
+                  , parser-combinators
+                  , safe
 
   if os(windows)
     build-depends:  Win32
@@ -232,4 +236,6 @@ executable test-repl
                   , text      >= 2
                   , raw-strings-qq
                   , mtl
+                  , parser-combinators
+                  , safe
   

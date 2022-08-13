@@ -2,77 +2,74 @@
 \usepackage[utf8]{inputenc}
 \usepackage{amsmath}
 \usepackage{amssymb}
-% This comment will be in output
+
 
 
 \begin{document}
   \section{Basics}
-    Basic elements of these language are Paragraphs, Environments and Prefs
+    
 
     \subsection{Paragraphs}
-      Paragraphs here, as well as in TeX are separated by empty lines:
+      
 
-      This is a simple paragraph Which continues at the next line
 
-      And this is the next paragraph
+
+
 
     \subsection{Environments}
 
     \subsection{Prefs}
 
   \section{Lists}
-    \texttt{@Prefs} style is very useful for items. Note that prefs should be indented more then
-    surrounding paragraphs
+    
     \begin{itemize}
-      \item enumerate (this text is in paragraph inside an item so it can be continued on the next
-            line):
+      \item 
             \begin{enumerate}
-              \item one (it should be more indented then paragraph)
-              \item two
-              \item three
+              \item 
+              \item 
+              \item 
             \end{enumerate}
-      \item itemize:
+      \item 
             \begin{itemize}
-              \item one
-              \item two
-              \item three
+              \item 
+              \item 
+              \item 
             \end{itemize}
     \end{itemize}
 
-    Consecutive elements of the list are framed by the itemize/enumerate environment, iff there are
-    no empty lines between them. So:
+
     \begin{enumerate}
-      \item one
-      \item two
-      \item three
+      \item 
+      \item 
+      \item 
     \end{enumerate}
 
     \begin{enumerate}
-      \item one again
-      \item two
+      \item 
+      \item 
     \end{enumerate}
 
   \section{Math}
-    Inline math can be inserted in paragraph in back quotes: $a + b = c$ --- this is inline math
+    $$
 
-    For block math \texttt{@Prefs} syntax is used:
-    \begin{align*}
-      a + b = c
-    \end{align*}
-    Next lines will be framed by align* environment and \verb.\\. will be added between them
-    automatically
-    \begin{align*}
-      a + b &= c\\
-      (a + b)^2 &= d
-    \end{align*}
 
     \begin{align*}
-      a + b + c &= 0
+      
     \end{align*}
-    Note that the last equation will framed by separate align*, because there is an empty line
-    before it.
 
-  To be continued...
+
+
+    \begin{align*}
+      \\
+
+    \end{align*}
+
+    \begin{align*}
+      \\Box
+    \end{align*}
+
+
+
   \section{Known bugs and strange features}
-    There is nothing here at this moment
+    
 \end{document}

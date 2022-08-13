@@ -84,16 +84,20 @@ processFile Options {inpFile, outpFile, pageWidth, printOpts, dbgOpts} = do
     Right (defs, doc) -> do
       when dbgInit $
         dbg dbgMode stageInit doc
+      print "*"
       case runIdentity $ runParseT $ initDocToWordDoc defs doc of
         Left e -> IOUtils.putStrLn $ T.unpack e
         Right wdoc -> do
           when dbgWord $
             dbg dbgMode stageWord wdoc
+          print "*"
           case runIdentity $ runParseT $ wordDocToWord'Doc defs wdoc of
             Left e -> IOUtils.putStrLn $ T.unpack e
             Right w'doc -> do
+              print "?"
               when dbgWord' $
                 dbg dbgMode stageWord' w'doc
+              print "*"
               outp <- openFile outpFile WriteMode
               renderIO outp . makeStream printOpts pageWidth $ w'doc
               hClose outp
@@ -158,19 +162,6 @@ dbgOptions = do
             <> Opt.metavar "DIR"
             <> Opt.help "Print debug messages in many files in dirrectory DIR"
         )
-
--- DbgStd
--- <$ dbgStd
--- <|> DbgFile
--- <$> dbgFile
--- <|> pure NoDbg
-
--- dbgStd =
---   Opt.flag' () $
---     Opt.long ("dbg" <> name) <> Opt.help "Print message to stdout"
--- dbgFile =
---   Opt.strOption $
---     Opt.long ("dbg" <> name) <> Opt.metavar "FILE" <> Opt.help "Print message to FILE"
 
 prefTabModeOption :: Opt.Parser PrefTabMode
 prefTabModeOption =

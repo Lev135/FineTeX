@@ -20,6 +20,6 @@
 
   @In Math
     @Commands
-      <=           = "\leq"
-      >=           = "\geq"
-      !=           = "\neq"
+      "<="           = "\leq"
+      ">="           = "\geq"
+      "!="           = "\neq"

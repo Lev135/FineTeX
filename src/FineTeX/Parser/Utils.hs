@@ -139,7 +139,7 @@ pIdentifierL =
   lexeme
     ( T.cons
         <$> satisfy isLetter
-        <*> takeWhile1P Nothing (\ch -> isAlphaNum ch || ch `elem` ['-', '\''])
+        <*> takeWhileP Nothing (\ch -> isAlphaNum ch || ch `elem` ['-', '\''])
     )
     <?> "Identifier"
 
