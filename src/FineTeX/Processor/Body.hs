@@ -7,7 +7,7 @@ module FineTeX.Processor.Body where
 import Control.Lens (At (..), Ixed (..), non, to, view, (^.), (^?))
 import Control.Monad (join)
 import Control.Monad.Extra (concatMapM)
-import Control.Monad.RWS (MonadReader, MonadState (get, put), MonadWriter)
+import Control.Monad.RWS (MonadReader, MonadState (get, put), MonadWriter (tell))
 import Data.List.Extra (intercalate, repeatedly)
 import qualified Data.Map as M
 import Data.Maybe (fromMaybe)
@@ -15,7 +15,7 @@ import Data.Text (Text)
 import qualified Data.Text as T
 import FineTeX.Parser.Syntax
 import FineTeX.Processor.Syntax
-import FineTeX.Processor.Tokenizer (tokenize)
+import FineTeX.Processor.Tokenizer (TokenizeError (NoWayTokenize), tokenize)
 import FineTeX.Utils (Box (unBox), localState, spanMaybe)
 import Prelude hiding (Word)
 
@@ -23,7 +23,7 @@ type MonadM m p =
   ( Box p,
     MonadReader (Definitions p) m,
     MonadState ModeName m,
-    MonadWriter [[[Text]]] m
+    MonadWriter [TokenizeError Id Char] m
   )
 
 -- | Document after substitution environments' and prefs' definitions
@@ -251,12 +251,12 @@ replaceTokens = \case
     defs <- curModeDefs
     let rls = defs ^. rules
     ws' <- case tokenize (defs ^. tokMap) (T.unpack $ unBox w) of
-      Left _ ->
-        pure []
-      --     pure [WString w] --tell [es] >> pure []
+      Left NoWayTokenize {} ->
+        pure [WString w]
+      Left es ->
+        tell [es] >> pure []
       Right replMaps ->
         pure $ concatMap (\(i, m) -> concatMap (repl m) (rls M.! i)) replMaps
-    --     pure $ (\(i, replMap) -> map (subst replMap) (rls ^?! ix i)) =<< replMaps
     join <$> mapM replaceTokens ws'
   WSpace -> pure [WSpace']
   WMode mode ws -> localState $ do

@@ -237,15 +237,6 @@ data RToken' c = RToken'
 modifyIds :: (TokId -> TokId) -> RToken' c -> RToken' c
 modifyIds f tok@RToken' {tokId} = tok {tokId = f tokId}
 
--- makeRToken' :: (k, Token c r) -> RToken' k c
--- makeRToken' (name, Token {body, behind, ahead}) =
---   RToken'
---     { name,
---       rbody = reverse body,
---       rbehind = reverse behind,
---       ahead
---     }
-
 -- | Map with data for 'tokenize' function. Should be prepared by calling
 -- 'makeTokenizeMap' function
 --
@@ -256,8 +247,12 @@ data TokenizeMap k c r = TokenizeMap
     tokNames :: IntMap k
   }
 
-instance Show k => Show (TokenizeMap k c r) where
-  show = show . tokNames
+instance (Show k, Show c, Show r) => Show (TokenizeMap k c r) where
+  show TokenizeMap {tokMap, tokNames} =
+    unlines
+      [ "tokMap = " <> show tokMap,
+        "tokNames = " <> show tokNames
+      ]
 
 instance Ord c => Semigroup (TokenizeMap k c r) where
   TokenizeMap tokMap' procFuncs' tokNames'

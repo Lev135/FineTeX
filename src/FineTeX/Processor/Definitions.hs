@@ -35,6 +35,7 @@ data ProcessDefsError
   = MultipleDecl DefType Text Pos Pos
   | UndefinedMode Text Pos
   | UndefinedSort Text Pos
+  | Dbg String
   deriving (Show)
 
 instance PrettyErr ProcessDefsError where
@@ -60,6 +61,7 @@ instance PrettyErr ProcessDefsError where
           [ "Undefined sort '" <> name <> "'",
             "Note: unlike other definitions, sort must be defined before used"
           ]
+  prettyErr _ (Dbg txt) = "dbg: " <> P.pretty txt
 
 data State p = State
   { _definitions :: Definitions p,
@@ -101,9 +103,7 @@ procDefBlock = mapM_ $ \case
     mapM_ (procDefInModeBlock mode) defs
     toks <- use tokens
     let x = Tok.makeTokenizeMap toks
-        h g pa = sequenceBox $ g <$> pa
-        lens = definitions . inModes . at (unBox mode) . anon (mempty <$ mode) null . h
-    lens . tokMap %= (<> x)
+    lens mode . tokMap <>= x
 
 instance HasName (DefInline p) (p Text) where
   name = borders . _1
@@ -133,10 +133,10 @@ lens modeName = definitions . inModes . at (unBox modeName) . anon (mempty <$ mo
 
 procRuleDef :: forall m p. (PosC p, MState m p) => p ModeName -> DefRule p -> m ()
 procRuleDef modeName DefRule {_match, _rule} = do
-  i <- use $ lens modeName . rules . to M.keysSet . to S.lookupMax . non 0
+  i <- use $ lens modeName . rules . to M.keysSet . to S.lookupMax . to (fmap succ) . non 0
   lens modeName . rules %= M.insert i _rule
   tokAlts <- pmExpToTokenAlts i _match
-  tokens <>= tokAlts -- (<> ((i,) <$> tokAlts))
+  tokens <>= tokAlts
 
 pmExpToTokenAlts :: forall m p. (PosC p, MState m p) => Id -> PatMatchExp p -> m [Token]
 pmExpToTokenAlts i PatMatchExp {_behind, _current, _ahead} = do

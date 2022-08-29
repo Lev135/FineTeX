@@ -8,6 +8,7 @@
 
 module Processor.Body where
 
+import qualified Data.Map as M
 import qualified Data.Set as S
 import Data.String (IsString (..))
 import Data.Text (Text)
@@ -68,15 +69,17 @@ spec = do
       takeEL [env [par, el], env [el, par]] `shouldBe` [env [par], el, env [el, par]]
   describe "Testing tokenizer" $ do
     let toks =
-          [ ("a", ([], [['a']], [])),
-            ("b", ([], [['b']], [])),
-            ("c", ([], [['c']], [])),
-            ("ab", ([], [['a'], ['b']], [])),
-            ("a|b", ([], [['a', 'b']], []))
-          ]
-        t name = case lookup name toks of
-          Nothing -> undefined
-          (Just tr) -> tok name tr
+          M.fromList $
+            map
+              (\(name, tr) -> (name, tok name tr))
+              [ ("a", ([], [['a']], [])),
+                ("b", ([], [['b']], [])),
+                ("c", ([], [['c']], [])),
+                ("ab", ([], [['a'], ['b']], [])),
+                ("a|b", ([], [['a', 'b']], [])),
+                ("a(?b)", ([], [['a']], [WhiteSet ['b']]))
+              ]
+        t name = toks M.! name
         m names = makeTokenizeMap (t <$> names)
     it "Empty" $
       tokenize (m []) "" `shouldBe` Right []
@@ -107,3 +110,12 @@ spec = do
     it "Many chars fail" $
       tokenize (m ["a"]) "aaax"
         `shouldBe` Left (NoWayTokenize 3 [("a", "a"), ("a", "a"), ("a", "a")])
+    describe "Positive lookahead" $ do
+      it "a(?b) vs a" $
+        tokenize (m ["a(?b)"]) "a" `shouldBe` Right ["a"]
+      it "a(?b) vs aa" $
+        tokenize (m ["a(?b)"]) "aa" `shouldBe` Left (NoWayTokenize 0 [])
+      it "a(?b) vs ab" $
+        tokenize (m ["a(?b)"]) "ab" `shouldBe` Left (NoWayTokenize 1 [("a(?b)", "a")])
+      it "a(?b), b vs ab" $
+        tokenize (m ["a(?b)", "b"]) "ab" `shouldBe` Right ["a", "b"]

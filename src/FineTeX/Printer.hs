@@ -68,17 +68,20 @@ prettyWords = P.fillSep . prettyWordsList
     h = \case
       WString' s -> pretty $ unBox s
       WSpace' -> error "Space"
-      WGroup' ws -> P.pageWidth $ \pgWidth ->
-        P.nesting $ \nestLvl ->
-          if ribbonWidth pgWidth nestLvl > wordsWidth ws
-            then P.hsep $ prettyWordsList ws
-            else P.fillSep $ prettyWordsList ws
-    wordsWidth =
-      (\lens -> sum lens + length lens - 1)
-        . map wordsWidth
-        . filter (not . null)
-        . split (== WSpace')
+      WGroup' ws -> prettyWords ws
 
-    ribbonWidth (P.AvailablePerLine lineLength ribbonFraction) nestLvl =
-      floor $ fromIntegral (lineLength - nestLvl `max` 0) * ribbonFraction
-    ribbonWidth P.Unbounded _ = 100000
+{- P.pageWidth $ \pgWidth ->
+  P.nesting $ \nestLvl ->
+    if ribbonWidth pgWidth nestLvl > wordsWidth ws
+      then P.hsep $ prettyWordsList ws
+      else P.fillSep $ prettyWordsList ws
+wordsWidth =
+  (\lens -> sum lens + length lens - 1)
+    . map wordsWidth
+    . filter (not . null)
+    . split (== WSpace')
+
+ribbonWidth (P.AvailablePerLine lineLength ribbonFraction) nestLvl =
+  floor $ fromIntegral (lineLength - nestLvl `max` 0) * ribbonFraction
+ribbonWidth P.Unbounded _ = 100000
+-}

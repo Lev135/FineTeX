@@ -51,7 +51,9 @@ import FineTeX.Printer (Ann (..), PrefTabMode (..), PrintOpts (..), prettyDoc)
 import FineTeX.Processor.Body (Word', WordDocElement, bodyToWords, processBody, wordsToWords')
 import FineTeX.Processor.Definitions (ProcessDefsError, initState, processDefs)
 import qualified FineTeX.Processor.Definitions as ProcDefs
+import FineTeX.Processor.Syntax (Id)
 import qualified FineTeX.Processor.Syntax
+import FineTeX.Processor.Tokenizer (TokenizeError)
 import FineTeX.Utils (Box (..), Pos, PosC (..), PrettyErr (..), Sources, prettyPos, renderErrors, withError)
 import qualified Prettyprinter as P
 import qualified Prettyprinter.Render.Text as PR
@@ -83,7 +85,7 @@ data ParseSourceError
   | ParseError (ParseErrorBundle Text Void)
   | ImportError FilePath Pos ParseSourceError
   | ProcessError [ProcessDefsError]
-  | ProcessBodyError [[[Text]]]
+  | ProcessBodyError [TokenizeError Id Char]
 
 instance PrettyErr ParseSourceError where
   prettyErr src e = case e of

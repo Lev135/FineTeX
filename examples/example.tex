@@ -7,69 +7,74 @@
 
 \begin{document}
   \section{Basics}
-    
+    Basic elements of these language are Paragraphs, Environments and Prefs
 
     \subsection{Paragraphs}
-      
+      Paragraphs here, as well as in TeX are separated by empty lines:
 
+      This is a simple paragraph Which continues at the next line
 
-
-
+      And this is the next paragraph
 
     \subsection{Environments}
 
     \subsection{Prefs}
 
   \section{Lists}
-    
+    \texttt{@Prefs} style is very useful for items. Note that prefs should be indented more then
+    surrounding paragraphs
     \begin{itemize}
-      \item 
+      \item enumerate (this text is in paragraph inside an item so it can be continued on the next
+            line):
             \begin{enumerate}
-              \item 
-              \item 
-              \item 
+              \item one (it should be more indented then paragraph)
+              \item two
+              \item three
             \end{enumerate}
-      \item 
+      \item itemize:
             \begin{itemize}
-              \item 
-              \item 
-              \item 
+              \item one
+              \item two
+              \item three
             \end{itemize}
     \end{itemize}
 
-
+    Consecutive elements of the list are framed by the itemize/enumerate environment, iff there are
+    no empty lines between them. So:
     \begin{enumerate}
-      \item 
-      \item 
-      \item 
+      \item one
+      \item two
+      \item three
     \end{enumerate}
 
     \begin{enumerate}
-      \item 
-      \item 
+      \item one again
+      \item two
     \end{enumerate}
 
   \section{Math}
-    $$
+    Inline math can be inserted in paragraph in back quotes: $a + \leq = \geq$ --- this is inline
+    math
 
-
+    For block math \texttt{@Prefs} syntax is used:
     \begin{align*}
-      
+      a + \leq = \geq
+    \end{align*}
+    Next lines will be framed by align* environment and \verb.\\.
+
+    will be added between them automatically
+    \begin{align*}
+      a + \leq &= \geq\\
+      (a + \leq)^2 &= d
     \end{align*}
 
-
-
     \begin{align*}
-      \\
-
+      a + \leq + \geq &= 0
     \end{align*}
+    Note that the last equation will framed by separate align*, because there is an empty line
+    before it.
 
-    \begin{align*}
-      \\Box
-    \end{align*}
-
-
-
+  To be continued...
   \section{Known bugs and strange features}
-    
+    There is nothing here at this moment
 \end{document}

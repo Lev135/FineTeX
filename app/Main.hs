@@ -37,6 +37,15 @@ data Stage = Stage
     filename :: String
   }
 
+stageDefs :: Stage
+stageDefs =
+  Stage
+    { short = '0',
+      long = "defs",
+      description = "definitions, including imported from other files",
+      filename = "defs.dbg"
+    }
+
 stageInit :: Stage
 stageInit =
   Stage
@@ -65,7 +74,7 @@ stageWord' =
     }
 
 data DbgOptions = DbgOptions
-  { dbgInit, dbgWord, dbgWord' :: Bool,
+  { dbgDefs, dbgInit, dbgWord, dbgWord' :: Bool,
     dbgMode :: DbgMode
   }
   deriving (Show)
@@ -75,13 +84,15 @@ data DbgMode = NoDbg | DbgStd | DbgFile FilePath | DbgDir FilePath
 
 processFile :: Options -> IO ()
 processFile Options {inpFile, outpFile, pageWidth, printOpts, dbgOpts} = do
-  let DbgOptions {dbgInit, dbgWord, dbgWord', dbgMode} = dbgOpts
+  let DbgOptions {..} = dbgOpts
   print dbgOpts
   dir <- getCurrentDirectory
   mdoc <- runParseT $ parseDocSourceInit rfile dir inpFile
   case mdoc of
     Left e -> IOUtils.putStrLn $ T.unpack e
     Right (defs, doc) -> do
+      when dbgDefs $
+        dbg dbgMode stageDefs defs
       when dbgInit $
         dbg dbgMode stageInit doc
       print "*"
@@ -135,6 +146,7 @@ dbgOptions :: Opt.Parser DbgOptions
 dbgOptions = do
   dbgMode <-
     dbgStd <|> DbgFile <$> dbgFile <|> DbgDir <$> dbgDir <|> pure NoDbg
+  dbgDefs <- mkOpt stageDefs
   dbgInit <- mkOpt stageInit
   dbgWord <- mkOpt stageWord
   dbgWord' <- mkOpt stageWord'
