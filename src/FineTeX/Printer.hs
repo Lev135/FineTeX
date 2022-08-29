@@ -8,6 +8,7 @@ where
 
 import Data.List.Extra (split)
 import Data.Maybe (catMaybes)
+import qualified Data.Text as T
 import FineTeX.Parser.Syntax (EnvBody (..))
 import FineTeX.Processor.Body (Word' (..), WordDocElement (..))
 import FineTeX.Utils (Box (..))
@@ -68,20 +69,20 @@ prettyWords = P.fillSep . prettyWordsList
     h = \case
       WString' s -> pretty $ unBox s
       WSpace' -> error "Space"
-      WGroup' ws -> prettyWords ws
-
-{- P.pageWidth $ \pgWidth ->
-  P.nesting $ \nestLvl ->
-    if ribbonWidth pgWidth nestLvl > wordsWidth ws
-      then P.hsep $ prettyWordsList ws
-      else P.fillSep $ prettyWordsList ws
-wordsWidth =
-  (\lens -> sum lens + length lens - 1)
-    . map wordsWidth
-    . filter (not . null)
-    . split (== WSpace')
-
-ribbonWidth (P.AvailablePerLine lineLength ribbonFraction) nestLvl =
-  floor $ fromIntegral (lineLength - nestLvl `max` 0) * ribbonFraction
-ribbonWidth P.Unbounded _ = 100000
--}
+      WGroup' ws -> P.pageWidth $ \pgWidth ->
+        P.nesting $ \nestLvl ->
+          if ribbonWidth pgWidth nestLvl > wordsWidth ws
+            then P.hsep $ prettyWordsList ws
+            else P.fillSep $ prettyWordsList ws
+    wordsWidth =
+      (\lens -> sum lens + length lens - 1)
+        . map (sum . map wordWidth)
+        . filter (not . null)
+        . split (== WSpace')
+    wordWidth = \case
+      WString' str -> T.length $ unBox str
+      WSpace' -> error "unexpected space (list should be splitted on spaces)"
+      WGroup' ws -> wordsWidth ws
+    ribbonWidth (P.AvailablePerLine lineLength ribbonFraction) nestLvl =
+      floor $ fromIntegral (lineLength - nestLvl `max` 0) * ribbonFraction
+    ribbonWidth P.Unbounded _ = 100000

@@ -77,6 +77,13 @@
     Note that the last equation will framed by separate align*, because
     there is an empty line before it. 
 
+    Printer will try not to split inline math between lines: `a b c d e f g h i j k l m n o p q r s t u v w x y z`
+
+    Compare with simple text:
+
+    Printer will try not to split inline math between lines: a b c d e f g h i j k l m n o p q r s t u v w x y z
+
+
   To be continued...
   @Section "Known bugs and strange features"
     There is nothing here at this moment
