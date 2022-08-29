@@ -242,39 +242,42 @@ modifyIds f tok@RToken' {tokId} = tok {tokId = f tokId}
 --
 -- 'Semigroup' instance can be useful for inserting new elements
 data TokenizeMap k c r = TokenizeMap
-  { tokMap :: Map c [RToken' c],
+  { tokCount :: Int,
+    tokMap :: Map c [RToken' c],
     procFuncs :: IntMap ([c] -> r),
     tokNames :: IntMap k
   }
 
 instance (Show k, Show c, Show r) => Show (TokenizeMap k c r) where
-  show TokenizeMap {tokMap, tokNames} =
+  show TokenizeMap {tokCount, tokMap, tokNames} =
     unlines
-      [ "tokMap = " <> show tokMap,
+      [ "tokCount = " <> show tokCount,
+        "tokMap = " <> show tokMap,
         "tokNames = " <> show tokNames
       ]
 
 instance Ord c => Semigroup (TokenizeMap k c r) where
-  TokenizeMap tokMap' procFuncs' tokNames'
-    <> TokenizeMap tokMap'' procFuncs'' tokNames'' =
+  TokenizeMap tokCount' tokMap' procFuncs' tokNames'
+    <> TokenizeMap tokCount'' tokMap'' procFuncs'' tokNames'' =
       TokenizeMap
-        { tokMap = M.unionWith (<>) tokMap' tokMap''',
+        { tokCount = tokCount' + tokCount'',
+          tokMap = M.unionWith (<>) tokMap' tokMap''',
           procFuncs = procFuncs' <> procFuncs''',
           tokNames = tokNames' <> tokNames'''
         }
       where
-        len = length tokMap'
-        tokMap''' = map (modifyIds (+ len)) <$> tokMap''
-        procFuncs''' = IM.mapKeysMonotonic (+ len) procFuncs''
-        tokNames''' = IM.mapKeysMonotonic (+ len) tokNames''
+        tokMap''' = map (modifyIds (+ tokCount')) <$> tokMap''
+        procFuncs''' = IM.mapKeysMonotonic (+ tokCount') procFuncs''
+        tokNames''' = IM.mapKeysMonotonic (+ tokCount') tokNames''
 
 instance Ord c => Monoid (TokenizeMap k c r) where
-  mempty = TokenizeMap mempty mempty mempty
+  mempty = TokenizeMap 0 mempty mempty mempty
 
 singleTokMap :: Eq c => Token k c r -> TokenizeMap k c r
 singleTokMap Token {name, body, behind, ahead, postProc} =
   TokenizeMap
-    { tokMap = M.fromAscList $ map (,[rtok]) $ S.toList $ head body,
+    { tokCount = 1,
+      tokMap = M.fromAscList $ map (,[rtok]) $ S.toList $ head body,
       procFuncs = IM.singleton tokId postProc,
       tokNames = IM.singleton tokId name
     }
