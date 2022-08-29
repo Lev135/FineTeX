@@ -2,7 +2,7 @@
 \usepackage[utf8]{inputenc}
 \usepackage{amsmath}
 \usepackage{amssymb}
-
+% This comment will be in output
 
 
 \begin{document}
@@ -53,23 +53,21 @@
     \end{enumerate}
 
   \section{Math}
-    Inline math can be inserted in paragraph in back quotes: $a + \leq = \geq$ --- this is inline
-    math
+    Inline math can be inserted in paragraph in back quotes: $a + b = c$ --- this is inline math
 
     For block math \texttt{@Prefs} syntax is used:
     \begin{align*}
-      a + \leq = \geq
+      a + b = c
     \end{align*}
-    Next lines will be framed by align* environment and \verb.\\.
-
-    will be added between them automatically
+    Next lines will be framed by align* environment and \verb.\\. will be added between them
+    automatically
     \begin{align*}
-      a + \leq &= \geq\\
-      (a + \leq)^2 &= d
+      a + b &= c\\
+      (a + b)^2 &= d
     \end{align*}
 
     \begin{align*}
-      a + \leq + \geq &= 0
+      a + b + c &= 0
     \end{align*}
     Note that the last equation will framed by separate align*, because there is an empty line
     before it.
