@@ -160,10 +160,11 @@ data ArgKind p = AKString | AKSort (SortExp p)
 -- * Document body
 
 data DocElement p
-  = DocParagraph [[ParEl p]]
+  = DocParLine [ParEl p]
   | DocEnvironment (p Text) [ArgVal p] (EnvBody DocElement p)
   | DocPref (p Text) [ArgVal p] [DocElement p]
   | DocEmptyLine
+  | DocCommentLine (p Text)
 
 data ParEl p
   = ParText [WordOrSpace p]

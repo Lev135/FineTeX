@@ -55,48 +55,17 @@ deriving instance (Show (word p), Box p) => Show (WordDocElement word p)
 
 processBody :: MonadM m p => [DocElement p] -> m [WordDocElement Word' p]
 processBody els = do
-  let gels = groupPrefs . takeOutEmptyLines $ els
+  let gels = groupPrefs $ els
   wels <- localState $ mapM elToWord gels
   mapM elReplaceTokens wels
 
 bodyToWords :: MonadM m p => [DocElement p] -> m [WordDocElement Word p]
 bodyToWords els = do
-  let gels = groupPrefs . takeOutEmptyLines $ els
+  let gels = groupPrefs $ els
   localState $ mapM elToWord gels
 
 wordsToWords' :: MonadM m p => [WordDocElement Word p] -> m [WordDocElement Word' p]
 wordsToWords' = mapM elReplaceTokens
-
--- | Take trailing empty lines out of environments and prefs
--- should be called before grouping
-takeOutEmptyLines :: forall p. [DocElement p] -> [DocElement p]
-takeOutEmptyLines els = case takeOutELs els of
-  (els', True) -> els' <> [DocEmptyLine]
-  (els', False) -> els'
-  where
-    takeOutELs :: [DocElement p] -> ([DocElement p], Bool)
-    takeOutELs = foldr hh ([], False)
-
-    hh :: DocElement p -> ([DocElement p], Bool) -> ([DocElement p], Bool)
-    hh el ([], eol) = let (el', eol') = takeOutEL el in (el', eol || eol')
-    hh el (xs@(x : _), eol) =
-      let (el', eol') = takeOutEL el
-       in case (eol', x) of
-            (_, DocEmptyLine) -> (el : xs, eol)
-            (True, _) -> (el' <> (DocEmptyLine : xs), eol)
-            (False, _) -> (el' <> xs, eol)
-
-    takeOutEL :: DocElement p -> ([DocElement p], Bool)
-    takeOutEL el = case el of
-      DocParagraph _ -> ([el], False)
-      DocEnvironment _ _ (VerbBody _ _) -> ([el], False)
-      DocEnvironment name argvs (NoVerbBody els) ->
-        let (els', eol') = takeOutELs els
-         in ([DocEnvironment name argvs (NoVerbBody els')], eol')
-      DocPref name argvs els ->
-        let (els', eol') = takeOutELs els
-         in ([DocPref name argvs els'], eol')
-      DocEmptyLine -> ([], True)
 
 data GroupDocElement p
   = -- | Paragraph elements, not split on lines (eols are replaced by WordSpace)
@@ -110,23 +79,31 @@ data GroupDocElement p
 
 -- | Group prefixes and unline paragraphs.
 groupPrefs :: Box p => [DocElement p] -> [GroupDocElement p]
--- List must be NonEmpty according to realization of `repeatedly`
--- see https://github.com/ndmitchell/extra/issues/95 for more information
-groupPrefs = repeatedly $ \(el : els) -> case el of
-  DocParagraph lines ->
-    (GDocParagraph $ intercalate [ParText [ParSpace]] lines, els)
-  DocEnvironment name argvs els' ->
-    (GDocEnvironment name argvs (mapEnvBody groupPrefs els'), els)
-  DocPref name _ _ ->
-    let (prefs, els'') = spanMaybe (h name) (el : els)
-     in (GDocPrefGroup name prefs, els'')
-  DocEmptyLine ->
-    (GDocEmptyLine, els)
+groupPrefs = repeatedly h . removeComments
   where
-    h name (DocPref name' argvs els')
-      | name == name' = Just (argvs, groupPrefs els')
-      | otherwise = Nothing
-    h _ _ = Nothing
+    removeComments = filter $ \case
+      DocCommentLine _ -> False
+      _ -> True
+
+    h = \(el : els) -> case el of
+      DocParLine _ ->
+        let (lns, els'') = spanMaybe h (el : els)
+            h (DocParLine ln') = Just ln'
+            h _ = Nothing
+         in (GDocParagraph $ intercalate [ParText [ParSpace]] lns, els'')
+      DocEnvironment name argvs els' ->
+        (GDocEnvironment name argvs (mapEnvBody groupPrefs els'), els)
+      DocPref name _ _ ->
+        let (prefs, els'') = spanMaybe (h name) (el : els)
+            h name (DocPref name' argvs els')
+              | name == name' = Just (argvs, groupPrefs els')
+              | otherwise = Nothing
+            h _ _ = Nothing
+         in (GDocPrefGroup name prefs, els'')
+      DocEmptyLine ->
+        (GDocEmptyLine, els)
+      DocCommentLine _ ->
+        error "Comment found, removeComments should be called before this function"
 
 elToWord :: MonadM m p => GroupDocElement p -> m (WordDocElement Word p)
 elToWord = \case

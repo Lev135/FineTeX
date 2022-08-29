@@ -3,12 +3,14 @@
 {-# LANGUAGE PartialTypeSignatures #-}
 {-# LANGUAGE QuasiQuotes #-}
 {-# OPTIONS_GHC -Wno-missing-exported-signatures #-}
+{-# OPTIONS_GHC -Wno-missing-signatures #-}
 {-# OPTIONS_GHC -Wno-orphans #-}
+{-# OPTIONS_GHC -Wno-partial-type-signatures #-}
 
 module Parser.Body where
 
 import Control.Monad.Reader (ReaderT (..))
-import Control.Monad.State (evalState, evalStateT)
+import Control.Monad.State (evalStateT)
 import Data.Functor.Identity (Identity (Identity, runIdentity))
 import Data.String (IsString (..))
 import Data.Text (Text, unpack)
@@ -17,12 +19,12 @@ import Data.Void (Void)
 import FineTeX.FineTeX (Definitions, parseDefSource, runParseT)
 import FineTeX.Parser.Body
 import FineTeX.Parser.Definitions (Parser)
-import FineTeX.Parser.Syntax (ArgVal (AVString), DocElement (DocEmptyLine, DocEnvironment, DocParagraph), EnvBody (NoVerbBody, VerbBody), ParEl (ParInline, ParText), WordOrSpace (ParSpace, ParWord))
+import FineTeX.Parser.Syntax (ArgVal (AVString), DocElement (..), EnvBody (NoVerbBody, VerbBody), ParEl (ParInline, ParText), WordOrSpace (ParSpace, ParWord))
 import FineTeX.Parser.Utils
 import FineTeX.Utils (Box (..))
 import Test.Hspec (context, describe, it)
-import Test.Hspec.Megaparsec (failsLeaving, initialState, shouldFailOn, shouldParse, succeedsLeaving)
-import Text.Megaparsec (MonadParsec (getParserState), errorBundlePretty, some)
+import Test.Hspec.Megaparsec (failsLeaving, shouldFailOn, shouldParse, succeedsLeaving)
+import Text.Megaparsec (MonadParsec (getParserState), errorBundlePretty, mkPos, pos1, some)
 import qualified Text.Megaparsec as MP
 import Text.Megaparsec.Char (string)
 import Text.RawString.QQ (r)
@@ -151,29 +153,70 @@ spec = do
         parse' ("abc `d\nef`" `from` "") `failsLeaving` "\nef`"
 
     context "Parsing paragraph without inlines" $ do
-      let parse = parseAll (run pParagraph)
+      let parse = parseAll (run pParLine)
       it "Empty" $
         parse `shouldFailOn` ""
       it "One line" $
         parse "Some   text   here  "
-          `shouldParse` DocParagraph [[ParText ["Some", __, "text", __, "here", __]]]
+          `shouldParse` DocParLine [ParText ["Some", __, "text", __, "here", __]]
       it "Line with eol" $
-        parse "Some text\n" `shouldParse` DocParagraph [[ParText ["Some", __, "text"]]]
-      it "Two lines" $
-        parse "First line   \nSecond   line"
-          `shouldParse` DocParagraph [[ParText ["First", __, "line", __]], [ParText ["Second", __, "line"]]]
-      let parse' = parsePart (run pParagraph)
-      it "Positive indentation" $
-        parse' ("First line\n  Second line" `from` "") `succeedsLeaving` "Second line"
-      it "Negative indentation" $
-        parse' ("  First line\nSecond line" `from` "  ") `succeedsLeaving` "Second line"
-      it "Environment" $
-        parse' ("First line\n@Second line" `from` "") `succeedsLeaving` "@Second line"
+        parse "Some text\n" `shouldParse` DocParLine [ParText ["Some", __, "text"]]
+    -- it "Two lines" $
+    --   parse "First line   \nSecond   line"
+    --     `shouldParse` DocParagraph [[ParText ["First", __, "line", __]], [ParText ["Second", __, "line"]]]
+    -- let parse' = parsePart (run pParagraph)
+    -- it "Positive indentation" $
+    --   parse' ("First line\n  Second line" `from` "") `succeedsLeaving` "Second line"
+    -- it "Negative indentation" $
+    --   parse' ("  First line\nSecond line" `from` "  ") `succeedsLeaving` "Second line"
+    -- it "Environment" $
+    --   parse' ("First line\n@Second line" `from` "") `succeedsLeaving` "@Second line"
 
+    context "Testing pElements (noPrefInside = False)" $ do
+      let parse = parseAll (run (pElements False pos1))
+          parse' n = parsePart (run (pElements False (mkPos n)))
+          parse'' n = snd . parse' n
+      it "Empty" $
+        parse "" `shouldParse` []
+      it "One ParLine" $
+        parse "a b" `shouldParse` [DocParLine [ParText ["a", __, "b"]]]
+      it "One ParLine with eol" $
+        parse "a b\n" `shouldParse` [DocParLine [ParText ["a", __, "b"]]]
+      it "Two ParLines" $
+        parse "a\nb" `shouldParse` [DocParLine [ParText ["a"]], DocParLine [ParText ["b"]]]
+      it "Two ParLines with eol" $
+        parse "a\nb\n" `shouldParse` [DocParLine [ParText ["a"]], DocParLine [ParText ["b"]]]
+      it "EmptyLine" $
+        -- empty lines should not be consumed
+        parse' 0 ("\n" `from` "") `succeedsLeaving` "\n"
+      it "ParLines and EmptyLines" $
+        parse "a\n\nb\n"
+          `shouldParse` [ DocParLine [ParText ["a"]],
+                          DocEmptyLine,
+                          DocParLine [ParText ["b"]]
+                        ]
+      it "Start with EmptyLines" $
+        parse "\na\n"
+          `shouldParse` [ DocEmptyLine,
+                          DocParLine [ParText ["a"]]
+                        ]
+      it "Indented empty" $
+        parse'' 1 (" " `from` " ") `shouldParse` []
+      it "Indented empty with eol" $
+        parse' 1 (" \n" `from` " ") `succeedsLeaving` "\n"
+      it "Indented ParLine" $
+        parse'' 2 (" a b" `from` " ")
+          `shouldParse` [DocParLine [ParText ["a", __, "b"]]]
+      it "Indented and non-indented lines" $
+        parse' 2 (" a\nb" `from` " ") `succeedsLeaving` "b"
+      it "Indented and less-indented lines" $
+        parse' 3 ("  a\nb" `from` "  ")
+          `succeedsLeaving` "b"
     context "Parsing environment" $ do
       let parse = parseAll (run pEnvironment)
       let parse' = parsePart (run pEnvironment)
       let envs = ["Env", "NoPrefEnv", "MathEnv", "VerbEnv", "VerbIndEnv"]
+      let _Env els = DocEnvironment "Env" [] (NoVerbBody els)
       let body env
             | env == "VerbEnv" = VerbBody False []
             | env == "VerbIndEnv" = VerbBody True []
@@ -202,15 +245,15 @@ spec = do
         parse "@ArgEnv \"tmp\"\n" `shouldParse` DocEnvironment "ArgEnv" [AVString "tmp"] (NoVerbBody [])
       it "Env with paragraph" $
         parse "@Env\n  Some text"
-          `shouldParse` DocEnvironment "Env" [] (NoVerbBody [DocParagraph [[ParText ["Some", __, "text"]]]])
+          `shouldParse` DocEnvironment "Env" [] (NoVerbBody [DocParLine [ParText ["Some", __, "text"]]])
       it "Env with empty line" $
-        parse "@Env\n\n" `shouldParse` DocEnvironment "Env" [] (NoVerbBody [DocEmptyLine])
+        parse `shouldFailOn` "@Env\n\n"
       it "Env two paragraphs" $
         parse "@Env\n  First\n\n  Second"
           `shouldParse` DocEnvironment
             "Env"
             []
-            ( NoVerbBody [DocParagraph [[ParText ["First"]]], DocEmptyLine, DocParagraph [[ParText ["Second"]]]]
+            ( NoVerbBody [DocParLine [ParText ["First"]], DocEmptyLine, DocParLine [ParText ["Second"]]]
             )
       it "Env starting from empty line" $
         -- TODO: Add checking empty lines for other kinds of environments
@@ -219,44 +262,61 @@ spec = do
             "Env"
             []
             ( NoVerbBody
-                [DocEmptyLine, DocParagraph [[ParText ["a"]], [ParText ["b"]]]]
+                [DocEmptyLine, DocParLine [ParText ["a"]], DocParLine [ParText ["b"]]]
             )
       it "Env with unexpected pref" $
         parse `shouldFailOn` "@Env\n  text\n    tmp"
       it "Env stops" $
-        parse' ("@Env\n a\n\nb\n" `from` "") `succeedsLeaving` "b\n"
+        parse' ("@Env\n a\n\nb\n" `from` "") `succeedsLeaving` "\nb\n"
       it "Indented Env stops" $
-        parse' ("  @Env\n   a\n\n  b\n" `from` "  ") `succeedsLeaving` "b\n"
+        parse' ("  @Env\n   a\n\n  b\n" `from` "  ") `succeedsLeaving` "\n  b\n"
       it "Indented Env stops" $
-        parse' ("  @Env\n   a\n\n b\n" `from` "  ") `succeedsLeaving` "b\n"
+        parse' ("  @Env\n   a\n\n b\n" `from` "  ") `succeedsLeaving` "\n b\n"
       it "NoPrefEnv with unexpected pref" $
         parse "@NoPrefEnv\n  text\n    tmp"
           `shouldParse` DocEnvironment
             "NoPrefEnv"
             []
-            ( NoVerbBody [DocParagraph [[ParText ["text"]]], DocParagraph [[ParText ["tmp"]]]]
+            ( NoVerbBody [DocParLine [ParText ["text"]], DocParLine [ParText ["tmp"]]]
             )
       it "MathEnv with inline" $
         parse "@MathEnv\n  ?? ??"
           `shouldParse` DocEnvironment
             "MathEnv"
             []
-            ( NoVerbBody [DocParagraph [[ParInline "??" [ParText [__]]]]]
+            ( NoVerbBody [DocParLine [ParInline "??" [ParText [__]]]]
             )
       it "VerbEnv with many lines" $
         parse "@VerbEnv\n  a\n   b\n  c\n  d\n"
           `shouldParse` DocEnvironment "VerbEnv" [] (VerbBody False ["a", " b", "c", "d"])
       it "VerbEnv with empty line" $
-        parse "@VerbEnv\n\n\n" `shouldParse` DocEnvironment "VerbEnv" [] (VerbBody False ["", ""])
+        parse' ("@VerbEnv\n\n\n" `from` "") `succeedsLeaving` "\n\n"
       it "VerbEnv starting with empty line" $
         parse "@VerbEnv\n\n  a\n" `shouldParse` DocEnvironment "VerbEnv" [] (VerbBody False ["", "a"])
       it "VerbEnv with decrising indent" $
         parse "@VerbEnv\n   a\n  b\n c" `shouldParse` DocEnvironment "VerbEnv" [] (VerbBody False ["  a", " b", "c"])
       it "VerbEnv stops" $
-        parse' ("@VerbEnv\n a\n\nb\n" `from` "") `succeedsLeaving` "b\n"
+        parse' ("@VerbEnv\n a\n\nb\n" `from` "") `succeedsLeaving` "\nb\n"
       it "Indented VerbEnv stops" $
-        parse' ("  @VerbEnv\n   a\n\n  b\n" `from` "  ") `succeedsLeaving` "b\n"
+        parse' ("  @VerbEnv\n   a\n\n  b\n" `from` "  ") `succeedsLeaving` "\n  b\n"
       it "Indented VerbEnv stops" $
-        parse' ("  @VerbEnv\n   a\n\n b\n" `from` "  ") `succeedsLeaving` "b\n"
+        parse' ("  @VerbEnv\n   a\n\n b\n" `from` "  ") `succeedsLeaving` "\n b\n"
+
+      it "Empty lines in nested environments" $
+        parse "@Env\n  @Env\n\n    a\n\n  b"
+          `shouldParse` _Env
+            [ _Env [DocEmptyLine, DocParLine [ParText ["a"]]],
+              DocEmptyLine,
+              DocParLine [ParText ["b"]]
+            ]
+      let _item = DocPref "-" []
+      it "Empty lines in nested in environment" $
+        parse "@Env\n a\n  - b\n\n    c\n\n d"
+          `shouldParse` _Env
+            [ DocParLine [ParText ["a"]],
+              _item [DocParLine [ParText ["b"]], DocEmptyLine, DocParLine [ParText ["c"]]],
+              DocEmptyLine,
+              DocParLine [ParText ["d"]]
+            ]
   where
     __ = ParSpace

@@ -13,9 +13,8 @@ import qualified Data.Set as S
 import Data.String (IsString (..))
 import Data.Text (Text)
 import qualified Data.Text as T
-import FineTeX.Parser.Syntax (DocElement (..), EnvBody (NoVerbBody), WordOrSpace (..))
+import FineTeX.Parser.Syntax (WordOrSpace (..))
 import FineTeX.Parser.Utils (Posed (..))
-import FineTeX.Processor.Body
 import FineTeX.Processor.Tokenizer (BlackWhiteSet (..), Token (..), TokenizeError (..), makeTokenizeMap, tokenize)
 import GHC.Exts (IsList (..))
 import Test.Hspec (SpecWith, describe, it, shouldBe)
@@ -26,8 +25,8 @@ instance s ~ Text => IsString (Posed s) where
 instance IsString (WordOrSpace Posed) where
   fromString str = ParWord (fromString str)
 
-takeEL :: [DocElement Posed] -> [DocElement Posed]
-takeEL = takeOutEmptyLines
+-- takeEL :: [DocElement Posed] -> [DocElement Posed]
+-- takeEL = takeOutEmptyLines
 
 instance IsList (BlackWhiteSet Char) where
   type Item (BlackWhiteSet Char) = Char
@@ -39,34 +38,35 @@ tok name (behind, body, ahead) = Token {name, body, behind, ahead, postProc = id
 
 spec :: SpecWith ()
 spec = do
-  describe "Testing takeOutEmptyLines" $ do
-    let el = DocEmptyLine
-        par = DocParagraph [[]]
-        env = DocEnvironment "Env" [] . NoVerbBody
-    it "Empty" $
-      takeEL [] `shouldBe` []
-    it "EL" $
-      takeEL [el] `shouldBe` [el]
-    it "Par, EL, Par" $
-      takeEL [par, el, par] `shouldBe` [par, el, par]
-    it "Env[]" $
-      takeEL [env []] `shouldBe` [env []]
-    it "Env[EL]" $
-      takeEL [env [el]] `shouldBe` [env [], el]
-    it "Env[EL], EL" $
-      takeEL [env [el], el] `shouldBe` [env [], el]
-    it "Env[Env[EL]]" $
-      takeEL [env [env [el]]] `shouldBe` [env [env []], el]
-    it "Env[Par, EL, Par]" $
-      takeEL [env [par, el, par]] `shouldBe` [env [par, el, par]]
-    it "Env[Par, EL, Par, EL]" $
-      takeEL [env [par, el, par, el]] `shouldBe` [env [par, el, par], el]
-    it "Env[Par, EL, Env [EL]]" $
-      takeEL [env [par, el, env [el]]] `shouldBe` [env [par, el, env []], el]
-    it "Env[Par, EL], Par" $
-      takeEL [env [par, el], par] `shouldBe` [env [par], el, par]
-    it "Env[Par, EL], Env [EL, par]" $
-      takeEL [env [par, el], env [el, par]] `shouldBe` [env [par], el, env [el, par]]
+  {-  describe "Testing takeOutEmptyLines" $ do
+      let el = DocEmptyLine
+          par = DocParagraph [[]]
+          env = DocEnvironment "Env" [] . NoVerbBody
+      it "Empty" $
+        takeEL [] `shouldBe` []
+      it "EL" $
+        takeEL [el] `shouldBe` [el]
+      it "Par, EL, Par" $
+        takeEL [par, el, par] `shouldBe` [par, el, par]
+      it "Env[]" $
+        takeEL [env []] `shouldBe` [env []]
+      it "Env[EL]" $
+        takeEL [env [el]] `shouldBe` [env [], el]
+      it "Env[EL], EL" $
+        takeEL [env [el], el] `shouldBe` [env [], el]
+      it "Env[Env[EL]]" $
+        takeEL [env [env [el]]] `shouldBe` [env [env []], el]
+      it "Env[Par, EL, Par]" $
+        takeEL [env [par, el, par]] `shouldBe` [env [par, el, par]]
+      it "Env[Par, EL, Par, EL]" $
+        takeEL [env [par, el, par, el]] `shouldBe` [env [par, el, par], el]
+      it "Env[Par, EL, Env [EL]]" $
+        takeEL [env [par, el, env [el]]] `shouldBe` [env [par, el, env []], el]
+      it "Env[Par, EL], Par" $
+        takeEL [env [par, el], par] `shouldBe` [env [par], el, par]
+      it "Env[Par, EL], Env [EL, par]" $
+        takeEL [env [par, el], env [el, par]] `shouldBe` [env [par], el, env [el, par]]
+  -}
   describe "Testing tokenizer" $ do
     let toks =
           M.fromList $

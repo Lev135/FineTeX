@@ -9,9 +9,8 @@
 module FineTeX.Parser.Body where
 
 import Control.Lens (Ixed (ix), makeLenses, to, use, view, (.=), (^.))
-import Control.Monad (guard, void)
+import Control.Monad (void)
 import Control.Monad.RWS (MonadReader, MonadState)
-import Data.List.Extra (nubSort)
 import qualified Data.Map as M
 import Data.Maybe (maybeToList)
 import Data.Text (Text)
@@ -23,7 +22,7 @@ import FineTeX.Parser.Utils hiding (ParserM)
 import FineTeX.Processor.Syntax
 import FineTeX.Utils (Box (..), PosC, localState)
 import Text.Megaparsec
-import Text.Megaparsec.Char (char, eol, string)
+import Text.Megaparsec.Char (char, string)
 import qualified Text.Megaparsec.Char.Lexer as L
 
 data MState = MState
@@ -57,52 +56,53 @@ pBody :: ParserM m p => m [DocElement Posed]
 pBody = L.nonIndented scn (pElements False pos1)
 
 -- | Parse many (zero or more) elements until the indentation
---   will be less then 'ind0'
+--   will be less then @ind@
 --
 -- There are two modes of parsing elements:
---   - normal ('noPref' is false).
---     All paragraphs and environments must have
---     minimal indentation in the block
---     Prefs must have greater indentation (equal for all of them)
---   - no-prefix mode ('noPref' is true).
---     Paragraphs and environments can have arbitrary
---     indentation, grater than ind0.
---     However indentation of different lines in one paragraph must be the same.
+--   - normal (@noPref@ is false).
+--     All paragraphs, environments and comments must have indentation @ind@.
+--     Prefs must have greater indentation
+--   - no-prefix mode (@noPref@ is true).
+--     Paragraphs, environments and comments can have arbitrary
+--     indentation, grater or equal to ind.
 --     Nothing is considered to be a prefix.
 pElements :: ParserM m p => Bool -> Pos -> m [DocElement Posed]
-pElements noPref ind0 = do
-  inds <- if noPref then pure [pos1] else getBlockIndents ind0
-  manyTill (pel inds) pend
+pElements noPref ind = manyTill pel pend
   where
-    pel [] = DocEmptyLine <$ scn1
-    pel [_] = (DocEmptyLine <$ scn1) <|> pEnvironment <|> pParagraph
-    pel (p : pref : _) =
-      (DocEmptyLine <$ scn1) <|> do
-        ind <- L.indentLevel
-        if
-            | ind == p -> pEnvironment <|> pParagraph
-            | ind == pref -> pPref
-            | otherwise ->
-              fail . unwords $
-                [ "Incorrect indentation " <> sh ind <> ".",
-                  "It should be " <> sh p <> " (for paragraphs/environments) or ",
-                  sh pref <> " (for prefs)."
-                ]
-    sh = show . unPos
-    pend = eof <|> void (notFollowedBy eol *> L.indentGuard sc LT ind0)
+    pel
+      | noPref = pEmptyLine <|> pEnvironment <|> pParLine <|> pCommentLine
+      | otherwise =
+        pEmptyLine <|> do
+          ind' <- L.indentLevel
+          if ind == ind'
+            then pCommentLine <|> pEnvironment <|> pParLine
+            else pPref
+    pEmptyLine = DocEmptyLine <$ eol
+    pend = try . lookAhead $ spn *> (eof <|> void (L.indentGuard sp LT ind))
 
--- | Parse some lines of paragraph.
--- Lines must have the same indentation and the first symbol of the paragraph can not be '@'.
+-- | Parse environment body in verb mode until the indentation
+--   become less than ind
+--
+-- Empty lines at the end of environment will not be consumed
+pVerb :: ParserM m p => Pos -> m [Posed Text]
+pVerb ind = manyTill (pEmptyLine <|> pNonEmptyLine) pend
+  where
+    pEmptyLine = withPos ("" <$ eol) <* sp
+    pNonEmptyLine = do
+      ind' <- L.indentLevel
+      s <- withPos $ T.pack <$> manyTill anySingle eolf
+      return $ (T.replicate (unPos ind' - unPos ind) " " <>) <$> s
+    pend = try . lookAhead $ spn *> (eof <|> void (L.indentGuard sp LT ind))
+
+pCommentLine :: ParserM m p => m (DocElement Posed)
+pCommentLine = DocCommentLine <$> withPos lineComment <* eol
+
+-- | Parse a line of paragraph. The first symbol can not be '@'.
 -- Empty lines are not allowed
-pParagraph :: ParserM m p => m (DocElement Posed)
-pParagraph = do
-  assert $ notFollowedBy sp1
-  lvl <- L.indentLevel
-  els <- some $ do
-    L.indentGuard sc EQ lvl
-    notFollowedBy $ char '@'
-    some pParEl <* sc <* eolf <* sc
-  return $ DocParagraph els
+pParLine :: ParserM m p => m (DocElement Posed)
+pParLine = do
+  notFollowedBy $ char '@'
+  DocParLine <$> some pParEl <* sc <* eolf <* sp
 
 pEnvironment :: ParserM m p => m (DocElement Posed)
 pEnvironment = do
@@ -111,14 +111,19 @@ pEnvironment = do
   (name, env) <-
     parseMapEl (defs ^. envs) "environment" (char '@' *> pIdentifierL)
   argvs <- mapM pArgV $ env ^. args
-  eolf *> sc
+  eolf
+  ind' <- getBlockInnerIndent ind
   body <- case env ^. inner of
-    Verb verbInd ->
-      VerbBody verbInd <$> pVerb (ind <> pos1)
+    Verb verbInd -> do
+      case ind' of
+        Inf -> pure $ VerbBody verbInd []
+        Pos ind' -> VerbBody verbInd <$> pVerb ind'
     NoVerb EnvNoVerb {_innerModeName, _noPrefInside} ->
-      localState $ do
-        curModeName .= unBox _innerModeName
-        NoVerbBody <$> pElements _noPrefInside (ind <> pos1)
+      case ind' of
+        Inf -> pure $ NoVerbBody []
+        Pos ind' -> localState $ do
+          curModeName .= unBox _innerModeName
+          NoVerbBody <$> pElements _noPrefInside ind'
   return $ DocEnvironment name argvs body
 
 pPref :: ParserM m p => m (DocElement Posed)
@@ -128,8 +133,10 @@ pPref = do
   (name, pref) <-
     parseMapEl (defs ^. prefs) "prefix" pPrefixL
   argvs <- mapM pArgV $ pref ^. args
-  sc
-  DocPref name argvs <$> pElements (pref ^. noPrefInside) (ind <> pos1)
+  ind' <- getBlockInnerIndent ind
+  case ind' of
+    Inf -> DocPref name argvs [] <$ eol
+    (Pos ind') -> DocPref name argvs <$> pElements (pref ^. noPrefInside) ind'
 
 -- | Parse non-empty block of text or inline
 pParEl :: ParserM m p => m (ParEl Posed)
@@ -152,8 +159,10 @@ pParWord = withPos $ do
           <|> sp1
           <|> eolf
           <|> void (char '%')
-  lookAhead $ notFollowedBy endP
-  T.pack <$> manyTill anySingle (lookAhead endP)
+  -- 'notFollowedBy' is necessary, because 'someTill'
+  -- does not fail if endP consumes the first character
+  notFollowedBy (lookAhead endP)
+  T.pack <$> someTill anySingle (lookAhead endP)
 
 -- | Parse one of available open inline sequences of characters,
 -- than paragraph elements in inner mode and corresponding close inline sequence
@@ -187,37 +196,35 @@ prettyArg arg = "(" <> nameS <> " : " <> typeS <> ")"
       AKString -> "String"
       AKSort _ -> "Word"
 
--- | Parse environment body in verb mode,
--- i. e. zero or more lines with greater than ind0 indentation or empty lines.
--- Empty lines at the end of environment will be consumed
--- (and so will be printed in the same number).
-pVerb :: ParserM m p => Pos -> m [Posed Text]
-pVerb ind0 = do
-  inds <- getBlockIndents ind0
-  manyTill (pel inds) pend
-  where
-    pel [] = withPos ("" <$ sc <* eol <* sc)
-    pel (p : _) =
-      withPos ("" <$ sc <* eol <* sc) <|> do
-        ind <- L.indentLevel
-        s <- withPos $ T.pack <$> manyTill anySingle eolf
-        sc
-        return $ (T.replicate (unPos ind - unPos p) " " <>) <$> s
-    pend = eof <|> void (notFollowedBy eol *> L.indentGuard sc LT ind0)
-
 -- | Get 'InModeDefs' block appropriate to current mode
 curModeDefs :: ParserM m p => m (InModeDefs p)
 curModeDefs = do
   modeName <- use curModeName
   view $ inModes . ix modeName . to unBox
 
--- | Get list of indentations of all lines in block starting from current position
--- end ending on a non-empty string with indentation less then 'ind0' or 'eof'.
-getBlockIndents :: ParserM m p => Pos -> m [Pos]
-getBlockIndents ind0 = lookAhead . fmap nubSort . (scn *>) . many $ do
-  ind <- L.indentLevel
-  guard $ ind >= ind0
-  notFollowedBy eof
-  manyTill anySingle eolf
-  scn
-  return ind
+data PosInf = Inf | Pos Pos
+  deriving (Eq, Show)
+
+instance Ord PosInf where
+  _ <= Inf = True
+  Inf <= (Pos _) = False
+  (Pos a) <= (Pos b) = a <= b
+
+-- | Get maximal indentation of all lines in block starting from current
+-- position and ending on a non-empty string with indentation less then 'ind0'
+-- or at the end of file.
+--
+-- If block is empty @PosInf@ is returned
+--
+-- _NB. Trailing empty lines are not excluded, but have no influence on result,
+-- since @PosInf@ is grater than any significant indentation_
+getBlockInnerIndent :: ParserM m p => Pos -> m PosInf
+getBlockInnerIndent ind0 =
+  lookAhead . fmap (foldr min Inf) . many $
+    emptyLine <|> nonEmptyLine
+  where
+    emptyLine = Inf <$ eol <* sp
+    nonEmptyLine =
+      Pos <$> L.indentGuard sc GT ind0
+        <* someTill anySingle eolf
+        <* sp

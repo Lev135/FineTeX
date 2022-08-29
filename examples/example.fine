@@ -38,7 +38,6 @@
     
     @Subsection "Prefs"
 
-
   @Section "Lists" 
     \texttt{@Prefs} style is very useful for items.
     Note that prefs should be indented more then surrounding paragraphs
@@ -67,9 +66,9 @@
 
     For block math \texttt{@Prefs} syntax is used: 
       > a + b = c 
-    Next lines will be framed by align* environment and \verb.\\.%
+    Next lines will be framed by align* environment and \verb.\\.
     % \verb is used here to escape LaTeX compilation errors 
-    % '%' two lines above is to prevent splitting paragraph on two parts by this comment
+    % Note: paragraph is not split on two parts by this comment
     will be added between them automatically
       > a + b     &= c
       > (a + b)^2 &= d

@@ -37,7 +37,8 @@ import Text.Megaparsec
     (<?>),
     (<|>),
   )
-import Text.Megaparsec.Char (char, eol, string)
+import Text.Megaparsec.Char (char, string)
+import qualified Text.Megaparsec.Char as MP
 import qualified Text.Megaparsec.Char.Lexer as L
 
 -- Primitives
@@ -77,35 +78,51 @@ withPos pa = do
   e <- getSourcePos
   return $ Posed a (b, e)
 
--- | parse at least one space or tab symbol
+-- | parse one space symbol
+space :: ParserM m => m ()
+space = void $ char ' ' <|> char '\t'
+
+-- | parse at least one space symbol
 sp1 :: ParserM m => m ()
-sp1 = void $ some (char ' ' <|> char '\t')
+sp1 = void $ some space
 
 -- | parse spaces or tab symbols
 sp :: ParserM m => m ()
-sp = void $ many (char ' ' <|> char '\t')
+sp = void $ many space
+
+-- | 'eol' with spaces after it
+eol :: ParserM m => m ()
+eol = void MP.eol <* sp
 
 -- | 'eol' or 'eof'
 eolf :: ParserM m => m ()
-eolf = void eol <|> eof
+eolf = eol <|> eof
 
 -- | parse line comment starting with '%'
 --   'eol' after comment will be not consumed
-lineComment :: ParserM m => m ()
-lineComment = void $ char '%' *> manyTill anySingle (lookAhead eolf)
+lineComment :: ParserM m => m Text
+lineComment = fmap T.pack $ char '%' *> manyTill anySingle (lookAhead eolf)
 
 -- | line spaces or comments \\
 --   'eol' after comment will be not consumed
 sc :: ParserM m => m ()
-sc = L.space sp1 lineComment empty
+sc = L.space sp1 (void lineComment) empty
 
 -- | line spaces, comments or 'eol'
 scn :: ParserM m => m ()
-scn = void $ sc `sepBy` eol
+scn = void $ sc `sepBy` MP.eol
 
 -- | line spaces, comments and at least one 'eol'
 scn1 :: ParserM m => m ()
-scn1 = sc *> eol *> scn
+scn1 = sc *> MP.eol *> scn
+
+-- | line spaces or 'eol' (without comments)
+spn :: ParserM m => m ()
+spn = void $ many (sp1 <|> eol)
+
+-- -- | line spaces and at least one 'eol' (without comments)
+-- spn1 :: ParserM m => m ()
+-- spn1 = void $ some (sp1 <|> eol)
 
 -- | Lexeme with spaces and 'eol' or comments after it
 lexeme :: ParserM m => m a -> m (Posed a)
