@@ -10,7 +10,7 @@ import Data.Map (Map)
 import qualified Data.Map as M
 import Data.Text (Text)
 import qualified Data.Text as T
-import Data.Void (Void, absurd)
+import Data.Void (Void)
 import qualified Prettyprinter as P
 import qualified Prettyprinter.Render.Text as P
 import Text.Megaparsec (SourcePos (..), unPos)
@@ -70,18 +70,6 @@ type Sources = Map FilePath [Text]
 
 class PrettyErr e where
   prettyErr :: Sources -> e -> ErrDoc
-
-class PrettyErrType et where
-  prettyErrType :: et -> Text
-
-data Error et e' = SimpleErr et Pos | ComplexErr e'
-
-instance PrettyErr Void where
-  prettyErr _ = absurd
-
-instance (PrettyErrType et, PrettyErr e') => PrettyErr (Error et e') where
-  prettyErr src (SimpleErr et p) = prettyPos src (prettyErrType et) p
-  prettyErr src (ComplexErr e') = prettyErr src e'
 
 type ErrDoc = P.Doc Void
 
