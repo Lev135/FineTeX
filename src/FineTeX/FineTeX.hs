@@ -43,7 +43,7 @@ import qualified Data.Map as M
 import Data.Text (Text)
 import qualified Data.Text as T
 import Data.Void (Void)
-import FineTeX.Parser.Body (curModeName, defaultState, pBody)
+import FineTeX.Parser.Body (defaultState, pBody)
 import FineTeX.Parser.Definitions (pDefBlock, pImportFilenames)
 import FineTeX.Parser.Syntax (DocElement, Word)
 import FineTeX.Parser.Utils (Posed (..))
@@ -140,7 +140,7 @@ initDocToWordDoc ::
   ParseT m WordDocument
 initDocToWordDoc defs doc = do
   let (doc', errs) =
-        runWriter . flip evalStateT (defaultState ^. curModeName) . flip runReaderT defs $
+        runWriter . flip evalStateT (defaultState ^. #curModeName) . flip runReaderT defs $
           bodyToWords doc
   case errs of
     [] -> return doc'
@@ -155,7 +155,7 @@ wordDocToWord'Doc ::
   ParseT m Word'Document
 wordDocToWord'Doc defs doc = do
   let (doc', errs) =
-        runWriter . flip evalStateT (defaultState ^. curModeName) . flip runReaderT defs $
+        runWriter . flip evalStateT (defaultState ^. #curModeName) . flip runReaderT defs $
           wordsToWords' doc
   case errs of
     [] -> return doc'
@@ -181,7 +181,7 @@ parseDocSource readFile base fileName = do
         snd . flip evalState defaultState . flip runReaderT defs . flip runParserT' state $
           (pBody <* eof)
   let (doc', errs) =
-        runWriter . flip evalStateT (defaultState ^. curModeName) . flip runReaderT defs $
+        runWriter . flip evalStateT (defaultState ^. #curModeName) . flip runReaderT defs $
           processBody doc
   case errs of
     [] -> return doc'
@@ -235,7 +235,7 @@ parseDefsImpl readFile base fileName = do
     defs' <- liftEither $ first ParseError mdefs'
     return (defs', state'')
   defs'' <- do
-    let (errs, ProcDefs.State {_definitions = defs''}) = flip runState (initState defs) . execWriterT $ processDefs defs'
+    let (errs, ProcDefs.State {definitions = defs''}) = flip runState (initState defs) . execWriterT $ processDefs defs'
     case errs of
       [] -> return defs''
       _ -> throwError $ ProcessError errs

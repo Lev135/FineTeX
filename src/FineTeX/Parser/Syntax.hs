@@ -1,28 +1,26 @@
+{-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE FunctionalDependencies #-}
-{-# LANGUAGE StandaloneDeriving #-}
-{-# LANGUAGE TemplateHaskell #-}
 
 module FineTeX.Parser.Syntax where
 
-import Control.Lens (makeFieldsNoPrefix, makePrisms)
 import Data.Text (Text)
 import FineTeX.Parser.Utils (Posed)
+import GHC.Generics (Generic)
 import Prelude hiding (Word)
 
 data Document = Document
-  { _imports :: [Import],
-    _definitions :: DefBlock,
-    _body :: [DocElement]
+  { imports :: [Import],
+    definitions :: DefBlock,
+    body :: [DocElement]
   }
-  deriving (Eq, Show)
+  deriving (Eq, Show, Generic)
 
 -- * Imports
 
 newtype Import = Import
-  { _filename :: Posed Text
+  { filename :: Posed Text
   }
-  deriving (Eq, Show)
+  deriving (Eq, Show, Generic)
 
 type ModeName = Text
 
@@ -39,7 +37,7 @@ data DefSubBlock
     DefSortBlock [DefSort]
   | -- | Block of definitions in specific mode (@\@In <modeName>@)
     DefInModeBlock (Posed ModeName) [DefInModeBlock]
-  deriving (Eq, Show)
+  deriving (Eq, Show, Generic)
 
 data DefInModeBlock
   = -- | @\@Environments@
@@ -50,50 +48,50 @@ data DefInModeBlock
     DefPrefBlock [DefPref]
   | -- | @\@Inlines@
     DefInlBlock [DefInline]
-  deriving (Eq, Show)
+  deriving (Eq, Show, Generic)
 
 newtype DefMode = DefMode
-  {_name :: Posed Text}
-  deriving (Eq, Show)
+  {name :: Posed Text}
+  deriving (Eq, Show, Generic)
 
 data DefSort = DefSort
-  { _name :: Posed Text,
-    _val :: SortExp
+  { name :: Posed Text,
+    val :: SortExp
   }
-  deriving (Eq, Show)
+  deriving (Eq, Show, Generic)
 
 data DefEnvironment = DefEnvironment
-  { _name :: Posed Text,
-    _begin, _end :: [RuleTerm],
-    _args :: [Argument],
-    _inner :: EnvInner
+  { name :: Posed Text,
+    begin, end :: [RuleTerm],
+    args :: [Argument],
+    inner :: EnvInner
   }
-  deriving (Eq, Show)
+  deriving (Eq, Show, Generic)
 
 data DefPref = DefPref
-  { _name :: Posed Text,
-    _begin, _end :: [RuleTerm],
-    _args :: [Argument],
-    _pref, _suf, _sep :: [RuleTerm],
-    _innerModeName :: Posed Text,
-    _noPrefInside :: Bool
+  { name :: Posed Text,
+    begin, end :: [RuleTerm],
+    args :: [Argument],
+    pref, suf, sep :: [RuleTerm],
+    innerModeName :: Posed Text,
+    noPrefInside :: Bool
   }
-  deriving (Eq, Show)
+  deriving (Eq, Show, Generic)
 
 data DefRule = DefRule
   { -- | Left side of rule definition
-    _match :: PatMatchExp,
+    match :: PatMatchExp,
     -- | Right side of rule definition
-    _rule :: [RuleTerm]
+    rule :: [RuleTerm]
   }
-  deriving (Eq, Show)
+  deriving (Eq, Show, Generic)
 
 data DefInline = DefInline
-  { _borders :: (Posed Text, Posed Text),
-    _begin, _end :: [RuleTerm],
-    _innerModeName :: Posed Text
+  { borders :: (Posed Text, Posed Text),
+    begin, end :: [RuleTerm],
+    innerModeName :: Posed Text
   }
-  deriving (Eq, Show)
+  deriving (Eq, Show, Generic)
 
 -- * Parts of definitions
 
@@ -103,29 +101,29 @@ data DefInline = DefInline
 -- - Normal ('NoVerb'), i. e. environment contains FineTeX code in some mode.
 -- - Verbatim ('Verb'). If 'Bool' is True indentation will be also preserved.
 data EnvInner = NoVerb EnvNoVerb | Verb Bool
-  deriving (Eq, Show)
+  deriving (Eq, Show, Generic)
 
 data EnvNoVerb = EnvNoVerb
-  { _innerModeName :: Posed Text,
-    _noPrefInside :: Bool
+  { innerModeName :: Posed Text,
+    noPrefInside :: Bool
   }
-  deriving (Eq, Show)
+  deriving (Eq, Show, Generic)
 
 -- ** Sorts of strings and rules patterns
 
 data PatMatchExp = PatMatchExp
-  { _behind, _ahead :: SortExp,
-    _current :: [PatMatchEl]
+  { behind, ahead :: SortExp,
+    current :: [PatMatchEl]
   }
-  deriving (Eq, Show)
+  deriving (Eq, Show, Generic)
 
 -- | Pattern match element
 -- @ '(' var ':' sort ')'  |  sort @
 data PatMatchEl = PatMatchEl
-  { _var :: Maybe (Posed VarName),
-    _sort :: SortExp
+  { var :: Maybe (Posed VarName),
+    sort :: SortExp
   }
-  deriving (Eq, Show)
+  deriving (Eq, Show, Generic)
 
 type VarName = Text
 
@@ -147,7 +145,7 @@ data SortExp
     SEConcat SortExp SortExp
   | -- | Match one sort or another
     SEOr SortExp SortExp
-  deriving (Eq, Show)
+  deriving (Eq, Show, Generic)
 
 -- | Term of the right part of rules, sections of prefs and envs
 data RuleTerm
@@ -160,18 +158,18 @@ data RuleTerm
   | -- | Rule terms need to be processed in particular mode
     -- (if Nothing, current mode is used)
     RTRun (Maybe (Posed ModeName)) [RuleTerm]
-  deriving (Eq, Show)
+  deriving (Eq, Show, Generic)
 
 -- ** Arguments
 
 data Argument = Argument
-  { _name :: Posed Text,
-    _kind :: ArgKind
+  { name :: Posed Text,
+    kind :: ArgKind
   }
-  deriving (Eq, Show)
+  deriving (Eq, Show, Generic)
 
 data ArgKind = AKString | AKSort SortExp
-  deriving (Eq, Show)
+  deriving (Eq, Show, Generic)
 
 -- * Document body
 
@@ -181,17 +179,17 @@ data DocElement
   | DocPref (Posed Text) [ArgVal] [DocElement]
   | DocEmptyLine
   | DocCommentLine (Posed Text)
-  deriving (Eq, Show)
+  deriving (Eq, Show, Generic)
 
 data ParEl
   = ParText [WordOrSpace]
   | ParInline Text [ParEl]
-  deriving (Eq, Show)
+  deriving (Eq, Show, Generic)
 
 data EnvBody el
   = VerbBody Bool [Posed Text]
   | NoVerbBody [el]
-  deriving (Eq, Show)
+  deriving (Eq, Show, Generic)
 
 mapEnvBody :: ([el] -> [el']) -> EnvBody el -> EnvBody el'
 mapEnvBody _ (VerbBody b els) = VerbBody b els
@@ -212,22 +210,10 @@ data Word
     WMode ModeName [Word]
   | -- | Group of words. Printer will try not to split it between lines
     WGroup [Word]
-  deriving (Eq, Show)
+  deriving (Eq, Show, Generic)
 
 data WordOrSpace = ParWord (Posed Text) | ParSpace
-  deriving (Eq, Show)
+  deriving (Eq, Show, Generic)
 
 data ArgVal = AVString (Posed Text) | AVSort (Posed Text)
-  deriving (Eq, Show)
-
-makeFieldsNoPrefix ''Document
-makeFieldsNoPrefix ''Import
-makeFieldsNoPrefix ''DefMode
-makeFieldsNoPrefix ''DefSort
-makeFieldsNoPrefix ''DefEnvironment
-makeFieldsNoPrefix ''DefPref
-makeFieldsNoPrefix ''DefRule
-makeFieldsNoPrefix ''DefInline
-makeFieldsNoPrefix ''Argument
-makeFieldsNoPrefix ''EnvNoVerb
-makePrisms ''EnvInner
+  deriving (Eq, Show, Generic)

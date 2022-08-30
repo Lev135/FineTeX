@@ -1,16 +1,9 @@
-{-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE FunctionalDependencies #-}
-{-# LANGUAGE GADTs #-}
-{-# LANGUAGE LambdaCase #-}
-{-# LANGUAGE MultiWayIf #-}
-{-# LANGUAGE StandaloneDeriving #-}
-{-# LANGUAGE TemplateHaskell #-}
-
 module FineTeX.Parser.Body where
 
-import Control.Lens (Ixed (ix), makeLenses, to, use, view, (.=), (^.))
+import Control.Lens (Ixed (ix), to, use, view, (.=), (^.))
 import Control.Monad (void)
 import Control.Monad.RWS (MonadReader, MonadState)
+import Data.Generics.Labels ()
 import qualified Data.Map as M
 import Data.Maybe (maybeToList)
 import Data.Text (Text)
@@ -21,18 +14,17 @@ import FineTeX.Parser.Syntax
 import FineTeX.Parser.Utils hiding (ParserM)
 import FineTeX.Processor.Syntax
 import FineTeX.Utils (localState)
+import GHC.Generics (Generic)
 import Text.Megaparsec
 import Text.Megaparsec.Char (char, string)
 import qualified Text.Megaparsec.Char.Lexer as L
 
 data MState = MState
-  { _curModeName :: Text,
-    _closeInline :: Maybe Text,
-    _prefIndent :: Maybe Pos
+  { curModeName :: Text,
+    closeInline :: Maybe Text,
+    prefIndent :: Maybe Pos
   }
-  deriving (Show)
-
-makeLenses ''MState
+  deriving (Show, Generic)
 
 type ParserM m =
   ( MonadFail m,
@@ -45,9 +37,9 @@ type ParserM m =
 defaultState :: MState
 defaultState =
   MState
-    { _curModeName = "Normal",
-      _closeInline = Nothing,
-      _prefIndent = Nothing
+    { curModeName = "Normal",
+      closeInline = Nothing,
+      prefIndent = Nothing
     }
 
 -- | Parse body of FineTeX document
@@ -108,21 +100,21 @@ pEnvironment = do
   ind <- L.indentLevel
   defs <- curModeDefs
   (name, env) <-
-    parseMapEl (defs ^. envs) "environment" (char '@' *> pIdentifierL)
-  argvs <- mapM pArgV $ env ^. args
+    parseMapEl (defs ^. #envs) "environment" (char '@' *> pIdentifierL)
+  argvs <- mapM pArgV $ env ^. #args
   eolf
   ind' <- getBlockInnerIndent ind
-  body <- case env ^. inner of
+  body <- case env ^. #inner of
     Verb verbInd -> do
       case ind' of
         Inf -> pure $ VerbBody verbInd []
         Pos ind' -> VerbBody verbInd <$> pVerb ind'
-    NoVerb EnvNoVerb {_innerModeName, _noPrefInside} ->
+    NoVerb EnvNoVerb {innerModeName, noPrefInside} ->
       case ind' of
         Inf -> pure $ NoVerbBody []
         Pos ind' -> localState $ do
-          curModeName .= getVal _innerModeName
-          NoVerbBody <$> pElements _noPrefInside ind'
+          #curModeName .= getVal innerModeName
+          NoVerbBody <$> pElements noPrefInside ind'
   return $ DocEnvironment name argvs body
 
 pPref :: ParserM m => m DocElement
@@ -130,12 +122,12 @@ pPref = do
   ind <- L.indentLevel
   defs <- curModeDefs
   (name, pref) <-
-    parseMapEl (defs ^. prefs) "prefix" pPrefixL
-  argvs <- mapM pArgV $ pref ^. args
+    parseMapEl (defs ^. #prefs) "prefix" pPrefixL
+  argvs <- mapM pArgV $ pref ^. #args
   ind' <- getBlockInnerIndent ind
   case ind' of
     Inf -> DocPref name argvs [] <$ eol
-    (Pos ind') -> DocPref name argvs <$> pElements (pref ^. noPrefInside) ind'
+    (Pos ind') -> DocPref name argvs <$> pElements (pref ^. #noPrefInside) ind'
 
 -- | Parse non-empty block of text or inline
 pParEl :: ParserM m => m ParEl
@@ -150,8 +142,8 @@ pParText = ParText <$> some (ParWord <$> pParWord <|> ParSpace <$ sp1)
 pParWord :: ParserM m => m (Posed Text)
 pParWord = withPos $ do
   defs <- curModeDefs
-  let openInls = defs ^. inlines . to M.keys
-  closeInl <- use closeInline
+  let openInls = defs ^. #inlines . to M.keys
+  closeInl <- use #closeInline
   let endP =
         choice
           (void . string <$> (openInls <> maybeToList closeInl))
@@ -168,38 +160,38 @@ pParWord = withPos $ do
 pInline :: forall m. ParserM m => m ParEl
 pInline = do
   defs <- curModeDefs
-  let openInls = defs ^. inlines . to (map snd . M.toList)
+  let openInls = defs ^. #inlines . to (map snd . M.toList)
   choice $ map mkInlP openInls
   where
     mkInlP :: DefInline -> m ParEl
-    mkInlP DefInline {_innerModeName, _borders = (b, e)} = do
+    mkInlP DefInline {innerModeName, borders = (b, e)} = do
       string (getVal b)
       els <- localState $ do
-        curModeName .= getVal _innerModeName
-        closeInline .= Just (getVal e)
+        #curModeName .= getVal innerModeName
+        #closeInline .= Just (getVal e)
         many pParEl
       string (getVal e)
       return $ ParInline (getVal b) els
 
 -- | Parse argument value: this will be changed soon
 pArgV :: ParserM m => Argument -> m ArgVal
-pArgV arg = label (prettyArg arg) $ case arg ^. kind of
+pArgV arg = label (prettyArg arg) $ case arg ^. #kind of
   AKString -> AVString <$> pStringLiteralL
   AKSort _ -> AVSort <$> pWordL
 
 prettyArg :: Argument -> String
 prettyArg arg = "(" <> nameS <> " : " <> typeS <> ")"
   where
-    nameS = arg ^. name . to (T.unpack . getVal)
-    typeS = case arg ^. kind of
+    nameS = arg ^. #name . to (T.unpack . getVal)
+    typeS = case arg ^. #kind of
       AKString -> "String"
       AKSort _ -> "Word"
 
 -- | Get 'InModeDefs' block appropriate to current mode
 curModeDefs :: ParserM m => m InModeDefs
 curModeDefs = do
-  modeName <- use curModeName
-  view $ inModes . ix modeName . to getVal
+  modeName <- use #curModeName
+  view $ #inModes . ix modeName . to getVal
 
 data PosInf = Inf | Pos Pos
   deriving (Eq, Show)

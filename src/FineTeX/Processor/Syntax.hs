@@ -1,42 +1,37 @@
-{-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE FunctionalDependencies #-}
-{-# LANGUAGE StandaloneDeriving #-}
-{-# LANGUAGE TemplateHaskell #-}
-
 module FineTeX.Processor.Syntax where
 
-import Control.Lens (makeLenses)
 import Data.Map (Map)
 import Data.Text (Text)
 import FineTeX.Parser.Syntax
 import FineTeX.Parser.Utils (Posed)
 import FineTeX.Processor.Tokenizer (BlackWhiteSetList)
 import qualified FineTeX.Processor.Tokenizer as Tok
+import GHC.Generics (Generic)
 import Prelude hiding (Word)
 
 data Definitions = Definitions
-  { _modes :: Map Text DefMode,
+  { modes :: Map Text DefMode,
     -- | Sorts tokens by name
-    _sorts :: Map Text (Posed [BlackWhiteSetList Char]),
-    _inModes :: Map Text (Posed InModeDefs)
+    sorts :: Map Text (Posed [BlackWhiteSetList Char]),
+    inModes :: Map Text (Posed InModeDefs)
   }
-  deriving (Show)
+  deriving (Show, Generic)
 
 type Id = Int
 
 data InModeDefs = InModeDefs
   { -- | Environments by name
-    _envs :: Map Text DefEnvironment,
+    envs :: Map Text DefEnvironment,
     -- | Prefs by name (pref string)
-    _prefs :: Map Text DefPref,
+    prefs :: Map Text DefPref,
     -- | Inlines by name (open string)
-    _inlines :: Map Text DefInline,
+    inlines :: Map Text DefInline,
     -- | Rules by Id (int identifier)
-    _rules :: Map Id [RuleTerm],
+    rules :: Map Id [RuleTerm],
     -- | Rules prepared for tokenizing
-    _tokMap :: TokenizeMap
+    tokMap :: TokenizeMap
   }
-  deriving (Show)
+  deriving (Show, Generic)
 
 type Token = Tok.Token Id Char (Id, Map VarName String)
 
@@ -54,6 +49,3 @@ instance Semigroup InModeDefs where
 
 instance Monoid InModeDefs where
   mempty = InModeDefs mempty mempty mempty mempty mempty
-
-makeLenses ''Definitions
-makeLenses ''InModeDefs

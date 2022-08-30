@@ -63,6 +63,12 @@ common basics
                       ScopedTypeVariables
                       ConstraintKinds
                       RankNTypes
+                      OverloadedLabels
+                      DataKinds
+                      FlexibleInstances
+                      MultiParamTypeClasses
+                      PartialTypeSignatures
+                      DeriveGeneric
 
   ghc-options:        -Wall
                       -Wcompat
@@ -106,6 +112,7 @@ library
                   , prettyprinter
                   , containers
                   , lens
+                  , generic-lens
                   , template-haskell
                   , parser-combinators
                   , safe
@@ -166,6 +173,7 @@ executable texgen-repl
                   , prettyprinter
                   , containers
                   , lens
+                  , generic-lens
                   , template-haskell
                   , optparse-applicative
                   , filepath
@@ -229,6 +237,7 @@ executable test-repl
                   , prettyprinter
                   , containers
                   , lens
+                  , generic-lens
                   , template-haskell
                   , hspec
                   , hspec-megaparsec

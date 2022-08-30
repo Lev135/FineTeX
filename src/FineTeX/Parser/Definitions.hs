@@ -35,7 +35,7 @@ pDefBlock = inEnvironment "Define" id (pDefModesBlock <|> pDefInModeBlock)
 
 pDefModesBlock :: Parser DefSubBlock
 pDefModesBlock = inEnvironment "Modes" DefModeBlock $ do
-  _name <- pIdentifierL
+  name <- pIdentifierL
   return DefMode {..}
 
 pDefInModeBlock :: Parser DefSubBlock
@@ -47,25 +47,25 @@ pDefInModeBlock = L.indentBlock scn $ do
 
 pDefEnvBlock :: Posed Text -> Parser DefInModeBlock
 pDefEnvBlock mode = inEnvironment "Environments" DefEnvBlock $ do
-  _name <- pIdentifierL
-  _args <- pDefArgs
+  name <- pIdentifierL
+  args <- pDefArgs
   strLexeme "="
-  ((_begin, _end), _inner) <-
+  ((begin, end), inner) <-
     pOpt $ do
       beginEnd <- pBeginEndOpt
       inner <-
         option
-          (NoVerb $ EnvNoVerb {_innerModeName = mode, _noPrefInside = False})
+          (NoVerb $ EnvNoVerb {innerModeName = mode, noPrefInside = False})
           ( Verb False <$ labelOpt "Verb"
               <||> Verb True <$ labelOpt "VerbIndent"
               <||> do
                 inMode <- optional $ mkOptP "InnerMode" pIdentifierL
-                _noPrefInside <- flagOpt "NoPrefInside"
-                case (inMode, _noPrefInside) of
+                noPrefInside <- flagOpt "NoPrefInside"
+                case (inMode, noPrefInside) of
                   (Nothing, False) -> empty
                   _ ->
                     return . NoVerb $
-                      EnvNoVerb {_innerModeName = fromMaybe mode inMode, _noPrefInside}
+                      EnvNoVerb {innerModeName = fromMaybe mode inMode, noPrefInside}
               <??> ["Verb", "VerbIndent", "InnerMode"]
           )
       return (beginEnd, inner)
@@ -73,17 +73,17 @@ pDefEnvBlock mode = inEnvironment "Environments" DefEnvBlock $ do
 
 pDefRuleBlock :: Parser DefInModeBlock
 pDefRuleBlock = inEnvironment "Commands" DefRuleBlock $ do
-  _match <- pPatMatchExp
+  match <- pPatMatchExp
   strLexeme "="
-  _rule <- pRuleTerms
+  rule <- pRuleTerms
   return DefRule {..}
 
 pDefPrefBlock :: Posed Text -> Parser DefInModeBlock
 pDefPrefBlock mode = inEnvironment "Prefs" DefPrefBlock $ do
-  _name <- pPrefixL
-  _args <- pDefArgs
+  name <- pPrefixL
+  args <- pDefArgs
   strLexeme "="
-  ((_begin, _end), _pref, _suf, _sep, _innerModeName, _noPrefInside, _grouping, _oneLine) <-
+  ((begin, end), pref, suf, sep, innerModeName, noPrefInside) <-
     pOpt $ do
       beginEnd <- pBeginEndOpt
       pref <- option [] (mkOptP "Pref" pRuleTerms)
@@ -91,16 +91,14 @@ pDefPrefBlock mode = inEnvironment "Prefs" DefPrefBlock $ do
       sep <- option [] (mkOptP "Sep" pRuleTerms)
       mode <- option mode (mkOptP "InnerMode" pIdentifierL)
       noPref <- flagOpt "NoPrefInside"
-      grouping <- not <$> flagOpt "NoGroup"
-      oneLine <- flagOpt "OneLine"
-      return (beginEnd, pref, suf, sep, mode, noPref, grouping, oneLine)
+      return (beginEnd, pref, suf, sep, mode, noPref)
   return DefPref {..}
 
 pDefInlBlock :: Posed Text -> Parser DefInModeBlock
 pDefInlBlock mode = inEnvironment "Inlines" DefInlBlock $ do
-  _borders <- (,) <$> pWordL <*> pWordL
+  borders <- (,) <$> pWordL <*> pWordL
   strLexeme "="
-  (_begin, _end, _innerModeName) <- pOpt $ do
+  (begin, end, innerModeName) <- pOpt $ do
     (begin, end) <- pBeginEndOpt
     innerMode <- option mode (mkOptP "InnerMode" pIdentifierL)
     return (begin, end, innerMode)
@@ -125,8 +123,8 @@ pOpt = toParsec (getVal <$> optNameP) optArgsConsumer
 
 {-}
 ppPatMatchExp :: forall p. Box p => PatMatchExp p -> Text
-ppPatMatchExp PatMatchExp {_behind, _current, _ahead} =
-  T.unwords [toStr _behind, toStr _current, toStr _ahead]
+ppPatMatchExp PatMatchExp {behind, current, ahead} =
+  T.unwords [toStr behind, toStr current, toStr ahead]
   where
     toStr :: [PatMatchEl p] -> Text
     toStr = T.intercalate " " . map toStrEl
@@ -149,9 +147,9 @@ ppPatMatchExp PatMatchExp {_behind, _current, _ahead} =
 -}
 pPatMatchExp :: Parser PatMatchExp
 pPatMatchExp = do
-  _behind <- option SEEmpty h
-  _current <- many pPatMatchEl
-  _ahead <- option SEEmpty h
+  behind <- option SEEmpty h
+  current <- many pPatMatchEl
+  ahead <- option SEEmpty h
   return $ PatMatchExp {..}
   where
     h =
@@ -167,9 +165,9 @@ pPatMatchEl = try pSimple <|> pBracet
     pSimple = PatMatchEl Nothing <$> pSortExp
     pBracet = do
       strLexeme "("
-      _var <- Just <$> pIdentifierL
+      var <- Just <$> pIdentifierL
       strLexeme ":"
-      _sort <- pSortExp
+      sort <- pSortExp
       strLexeme ")"
       return PatMatchEl {..}
 
@@ -224,8 +222,8 @@ pArgKind =
 pDefArgs :: Parser [Argument]
 pDefArgs = many . label "argument `(<name> : <kind>)`" $ do
   try $ strLexeme "("
-  _name <- pIdentifierL
+  name <- pIdentifierL
   strLexeme ":"
-  _kind <- pArgKind
+  kind <- pArgKind
   strLexeme ")"
   return Argument {..}
