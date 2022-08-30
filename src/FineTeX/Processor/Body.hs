@@ -1,10 +1,9 @@
 module FineTeX.Processor.Body where
 
-import Control.Lens (At (..), Ixed (..), non, to, view, (^.), (^?))
 import Control.Monad (join, (>=>))
 import Control.Monad.Extra (concatMapM)
-import Control.Monad.RWS (MonadReader, MonadState (get, put), MonadWriter (tell))
-import Data.Generics.Labels ()
+import Control.Monad.RWS (MonadReader, MonadState (get, put), MonadWriter (tell), asks)
+import Data.Generics.Product ()
 import Data.List.Extra (intercalate, repeatedly)
 import qualified Data.Map as M
 import Data.Maybe (fromMaybe)
@@ -15,6 +14,7 @@ import FineTeX.Parser.Utils (Posed, getVal)
 import FineTeX.Processor.Syntax
 import FineTeX.Processor.Tokenizer (TokenizeError (NoWayTokenize), tokenize)
 import FineTeX.Utils (localState, spanMaybe)
+import Optics (At (..), Ixed (..), non, preview, to, (%), (^.), (^?))
 import Prelude hiding (Word)
 
 type MonadM m =
@@ -104,19 +104,19 @@ elToWord = \case
   GDocParagraph parels -> WDocParagraph <$> concatMapM parElToWords parels
   GDocEnvironment name argvs body -> do
     defs <- curModeDefs
-    let env = defs ^. #envs . at (getVal name) . non (error "unexpected env")
+    let env = defs ^. #envs % at (getVal name) % non (error "unexpected env")
         beg' = substArgs' (env ^. #args) argvs (env ^. #begin)
         end' = substArgs' (env ^. #args) argvs (env ^. #end)
     curMode <- get
-    let mode = fromMaybe curMode $ env ^? #inner . #_NoVerb . #innerModeName . to getVal
+    let mode = fromMaybe curMode $ env ^? #inner % #_NoVerb % #innerModeName % to getVal
     body' <- localState $ do
       put mode
       mapMEnvBody (mapM elToWord) body
     return $ WDocEnvironment mode beg' body' end'
   GDocPrefGroup name items -> do
     defs <- curModeDefs
-    let pref = defs ^. #prefs . at (getVal name) . non (error "unexpected pref")
-    let mode = pref ^. #innerModeName . to getVal
+    let pref = defs ^. #prefs % at (getVal name) % non (error "unexpected pref")
+    let mode = pref ^. #innerModeName % to getVal
     let mkWords (isLast, (argvs, els)) = do
           let beg' = substArgs' (pref ^. #args) argvs (pref ^. #pref)
               end' = substArgs' (pref ^. #args) argvs (pref ^. #suf <> if isLast then [] else pref ^. #sep)
@@ -128,9 +128,9 @@ elToWord = \case
     return $
       WDocEnvironment
         mode
-        (pref ^. #begin . to (substArgs' [] []))
+        (pref ^. #begin % to (substArgs' [] []))
         (NoVerbBody items')
-        (pref ^. #end . to (substArgs' [] []))
+        (pref ^. #end % to (substArgs' [] []))
   GDocEmptyLine -> return WDocEmptyLine
 
 parElToWords :: MonadM m => ParEl -> m [Word]
@@ -141,16 +141,16 @@ parElToWords = \case
       ParSpace -> WSpace
   ParInline name parEls -> do
     defs <- curModeDefs
-    let inl = defs ^. #inlines . at name . non (error "unexpected inline")
-    let mode = inl ^. #innerModeName . to getVal
+    let inl = defs ^. #inlines % at name % non (error "unexpected inline")
+    let mode = inl ^. #innerModeName % to getVal
     parEls' <- localState $ do
       put mode
       mapM parElToWords parEls
     return
       [ WMode mode $
-          inl ^. #begin . to (substArgs' [] [])
+          inl ^. #begin % to (substArgs' [] [])
             <> [WGroup $ join parEls']
-            <> inl ^. #end . to (substArgs' [] [])
+            <> inl ^. #end % to (substArgs' [] [])
       ]
 
 -- | Term of the right part of rules, sections of prefs and envs
@@ -196,7 +196,8 @@ ruleTerm'ToWord = \case
 curModeDefs :: MonadM m => m InModeDefs
 curModeDefs = do
   modeName <- get
-  view $ #inModes . ix modeName . to getVal
+  defs <- asks $ preview $ #inModes % ix modeName % to getVal
+  return $ fromMaybe (error $ "Undefined mode" <> show modeName) defs
 
 elReplaceTokens :: MonadM m => WordDocElement Word -> m (WordDocElement Word')
 elReplaceTokens = \case

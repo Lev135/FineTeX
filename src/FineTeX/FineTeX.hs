@@ -31,7 +31,6 @@ module FineTeX.FineTeX
   )
 where
 
-import Control.Lens ((^.))
 import Control.Monad.Except (ExceptT, MonadError (throwError), MonadTrans (lift), liftEither, runExceptT)
 import Control.Monad.RWS (MonadWriter (..))
 import Control.Monad.Reader (ReaderT (..))
@@ -39,11 +38,12 @@ import Control.Monad.State (evalState, evalStateT, runState)
 import Control.Monad.Writer (WriterT (runWriterT), execWriterT, runWriter)
 import Data.Bifunctor (Bifunctor (..))
 import Data.Char (isSpace)
+import Data.Generics.Product ()
 import qualified Data.Map as M
 import Data.Text (Text)
 import qualified Data.Text as T
 import Data.Void (Void)
-import FineTeX.Parser.Body (defaultState, pBody)
+import FineTeX.Parser.Body (MState (..), defaultState, pBody)
 import FineTeX.Parser.Definitions (pDefBlock, pImportFilenames)
 import FineTeX.Parser.Syntax (DocElement, Word)
 import FineTeX.Parser.Utils (Posed (..))
@@ -54,6 +54,7 @@ import qualified FineTeX.Processor.Definitions as ProcDefs
 import FineTeX.Processor.Syntax (Definitions, Id)
 import FineTeX.Processor.Tokenizer (TokenizeError)
 import FineTeX.Utils (Pos, PrettyErr (..), Sources, prettyPos, renderErrors, withError)
+import Optics ((^.))
 import qualified Prettyprinter as P
 import qualified Prettyprinter.Render.Text as PR
 import System.IO (Handle)

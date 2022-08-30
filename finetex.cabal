@@ -56,8 +56,8 @@ common lib
                   , extra
                   , prettyprinter
                   , containers
-                  , lens
-                  , generic-lens
+                  , optics
+                  , generic-optics
                   , template-haskell
                   , parser-combinators
                   , safe

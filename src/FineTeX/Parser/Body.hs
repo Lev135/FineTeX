@@ -1,11 +1,10 @@
 module FineTeX.Parser.Body where
 
-import Control.Lens (Ixed (ix), to, use, view, (.=), (^.))
 import Control.Monad (void)
-import Control.Monad.RWS (MonadReader, MonadState)
-import Data.Generics.Labels ()
+import Control.Monad.RWS (MonadReader, MonadState, asks)
+import Data.Generics.Product ()
 import qualified Data.Map as M
-import Data.Maybe (maybeToList)
+import Data.Maybe (fromMaybe, maybeToList)
 import Data.Text (Text)
 import qualified Data.Text as T
 import Data.Void (Void)
@@ -15,6 +14,8 @@ import FineTeX.Parser.Utils hiding (ParserM)
 import FineTeX.Processor.Syntax
 import FineTeX.Utils (localState)
 import GHC.Generics (Generic)
+import Optics (Ixed (ix), preview, to, use, (%), (^.))
+import Optics.State.Operators ((.=))
 import Text.Megaparsec
 import Text.Megaparsec.Char (char, string)
 import qualified Text.Megaparsec.Char.Lexer as L
@@ -142,7 +143,7 @@ pParText = ParText <$> some (ParWord <$> pParWord <|> ParSpace <$ sp1)
 pParWord :: ParserM m => m (Posed Text)
 pParWord = withPos $ do
   defs <- curModeDefs
-  let openInls = defs ^. #inlines . to M.keys
+  let openInls = defs ^. #inlines % to M.keys
   closeInl <- use #closeInline
   let endP =
         choice
@@ -160,7 +161,7 @@ pParWord = withPos $ do
 pInline :: forall m. ParserM m => m ParEl
 pInline = do
   defs <- curModeDefs
-  let openInls = defs ^. #inlines . to (map snd . M.toList)
+  let openInls = defs ^. #inlines % to (map snd . M.toList)
   choice $ map mkInlP openInls
   where
     mkInlP :: DefInline -> m ParEl
@@ -182,7 +183,7 @@ pArgV arg = label (prettyArg arg) $ case arg ^. #kind of
 prettyArg :: Argument -> String
 prettyArg arg = "(" <> nameS <> " : " <> typeS <> ")"
   where
-    nameS = arg ^. #name . to (T.unpack . getVal)
+    nameS = arg ^. #name % to (T.unpack . getVal)
     typeS = case arg ^. #kind of
       AKString -> "String"
       AKSort _ -> "Word"
@@ -191,7 +192,8 @@ prettyArg arg = "(" <> nameS <> " : " <> typeS <> ")"
 curModeDefs :: ParserM m => m InModeDefs
 curModeDefs = do
   modeName <- use #curModeName
-  view $ #inModes . ix modeName . to getVal
+  defs <- asks $ preview $ #inModes % ix modeName % to getVal
+  return $ fromMaybe (error $ "Undefined mode: " <> show modeName) defs
 
 data PosInf = Inf | Pos Pos
   deriving (Eq, Show)

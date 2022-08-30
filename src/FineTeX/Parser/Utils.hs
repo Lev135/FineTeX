@@ -16,6 +16,7 @@ import Data.Text (Text)
 import qualified Data.Text as T
 import Data.Void (Void)
 import FineTeX.Utils (Pos, failMsg)
+import GHC.Generics (Generic)
 import GHC.Stack (HasCallStack)
 import Text.Megaparsec
   ( ErrorItem (Label),
@@ -47,7 +48,7 @@ import qualified Text.Megaparsec.Char.Lexer as L
 type ParserM m = (MonadParsec Void Text m, MonadFail m)
 
 data Posed a = Posed {getPos :: Pos, getVal :: a}
-  deriving (Functor)
+  deriving (Functor, Generic)
 
 instance Eq a => Eq (Posed a) where
   (==) = (==) `on` getVal

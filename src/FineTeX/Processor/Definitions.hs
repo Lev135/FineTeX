@@ -1,5 +1,6 @@
 {-# LANGUAGE MonoLocalBinds #-}
 {-# OPTIONS_GHC -Wno-orphans #-}
+{-# OPTIONS_GHC -Wno-partial-type-signatures #-}
 
 module FineTeX.Processor.Definitions
   ( State (..),
@@ -9,12 +10,9 @@ module FineTeX.Processor.Definitions
   )
 where
 
-import Control.Lens (At (at), Field1 (_1), Lens', anon, non, to, use, (%=), (<>=), (^.))
 import Control.Monad (forM_, unless, when)
 import Control.Monad.RWS (MonadState, MonadWriter (tell))
 import Data.Bifunctor (Bifunctor (..))
-import Data.Generics.Labels ()
-import Data.Generics.Product (HasField' (..))
 import Data.Map (Map)
 import qualified Data.Map as M
 import Data.Maybe (isNothing)
@@ -22,12 +20,15 @@ import qualified Data.Set as S
 import Data.Text (Text)
 import qualified Data.Text as T
 import FineTeX.Parser.Syntax
-import FineTeX.Parser.Utils (Posed, getPos, getVal, sequencePosed)
+import FineTeX.Parser.Utils (Posed, getPos, getVal)
 import FineTeX.Processor.Syntax
 import FineTeX.Processor.Tokenizer (BlackWhiteSet (..), BlackWhiteSetList)
 import qualified FineTeX.Processor.Tokenizer as Tok
 import FineTeX.Utils (Pos, PrettyErr (..), prettyPos)
 import GHC.Generics (Generic)
+import Optics (At (at), Field1 (_1), Lens', anon, non, to, use, (%), (^.))
+import qualified Optics as O
+import Optics.State.Operators ((%=))
 import qualified Prettyprinter as P
 import Safe.Exact (splitAtExactNote)
 
@@ -87,10 +88,10 @@ processDefs :: forall m. MState m => DefBlock -> m ()
 processDefs defs = do
   -- Lay out definitions in appropriate maps and check conflicting names
   procDefBlock defs
-  inModeModes <- use $ #definitions . #inModes . to (map (second getPos) . M.toList)
+  inModeModes <- use $ #definitions % #inModes % to (map (second getPos) . M.toList)
   -- Check modes for which we found definitions to be defined
   forM_ inModeModes $ \(pname, p) -> do
-    mmode <- use $ #definitions . #modes . at pname
+    mmode <- use $ #definitions % #modes % at pname
     when (isNothing mmode) $ tell [UndefinedMode pname p]
 
 -- TODO: make check for uniquely parsing of commands (rename ~~> tokens? prims?)
@@ -103,10 +104,10 @@ procDefBlock = mapM_ $ \case
     mapM_ (procDefInModeBlock mode) defs
     toks <- use #tokens
     let x = Tok.makeTokenizeMap toks
-    lens mode . #tokMap <>= x
+    lens mode % #tokMap %= (<> x)
 
-instance {-# OVERLAPS #-} HasField' "name" DefInline (Posed Text) where
-  field' = #borders . _1
+instance O.LabelOptic "name" O.A_Lens DefInline DefInline (Posed Text) (Posed Text) where
+  labelOptic = #borders % _1
 
 procDefInModeBlock :: forall m. MState m => Posed Text -> DefInModeBlock -> m ()
 procDefInModeBlock mode = \case
@@ -136,15 +137,12 @@ procDefInModeBlock mode = \case
   DefInlBlock defs -> mapM_ (addInMode #inlines DefTInl) defs
   where
     addInMode ::
-      ( HasField' "definitions" State Definitions,
-        HasField' "name" a (Posed Text)
-      ) =>
+      _ =>
       Lens' InModeDefs (Map Text a) ->
       DefType ->
       a ->
       m ()
-    addInMode lens deft = addDef (#inModes . at (getVal mode) . anon (mempty <$ mode) null . h . lens) deft
-    h g pa = sequencePosed $ g <$> pa
+    addInMode lens deft = addDef (#inModes % at (getVal mode) % anon (mempty <$ mode) null % #getVal % lens) deft
 
 checkRuleTerm :: MState m => [Argument] -> RuleTerm -> m ()
 checkRuleTerm args = \case
@@ -159,7 +157,7 @@ checkRuleTerm args = \case
 
 checkMode :: MState m => Posed Text -> m ()
 checkMode modeName = do
-  mode <- use (#definitions . (#modes :: Lens' Definitions (Map Text DefMode)) . at (getVal modeName))
+  mode <- use (#definitions % #modes % at (getVal modeName))
   case mode of
     Just _ -> pure ()
     Nothing -> tell [UndefinedMode (getVal modeName) (getPos modeName)]
@@ -169,16 +167,14 @@ procSort = undefined
 
 lens :: Posed Text -> Lens' State InModeDefs
 lens modeName =
-  #definitions . #inModes . at (getVal modeName) . anon (mempty <$ modeName) null . h
-  where
-    h g pa = sequencePosed $ g <$> pa
+  #definitions % #inModes % at (getVal modeName) % anon (mempty <$ modeName) null % #getVal
 
 procRuleDef :: forall m. MState m => Posed ModeName -> DefRule -> m ()
 procRuleDef modeName DefRule {match, rule} = do
-  i <- use $ lens modeName . #rules . to M.keysSet . to S.lookupMax . to (fmap succ) . non 0
-  lens modeName . #rules %= M.insert i rule
+  i <- use $ lens modeName % #rules % to M.keysSet % to S.lookupMax % to (fmap succ) % non 0
+  lens modeName % #rules %= M.insert i rule
   tokAlts <- pmExpToTokenAlts i match
-  #tokens <>= tokAlts
+  #tokens %= (<> tokAlts)
 
 pmExpToTokenAlts :: forall m. MState m => Id -> PatMatchExp -> m [Token]
 pmExpToTokenAlts i PatMatchExp {behind, current, ahead} = do
@@ -221,7 +217,7 @@ expToBWSetListAlts = \case
   SEString str -> pure [Tok.fromConcrete (T.unpack $ getVal str)]
   SESpace -> pure [[Tok.singleton ' ']]
   SESort sortName -> do
-    mz <- use $ #definitions . #sorts . at (getVal sortName)
+    mz <- use $ #definitions % #sorts % at (getVal sortName)
     case mz of
       Nothing -> do
         tell [UndefinedSort (getVal sortName) (getPos sortName)]
@@ -239,18 +235,14 @@ expToBWSetListAlts = \case
   SEEmpty -> pure [[]]
 
 addDef ::
-  ( HasField' "definitions" s Definitions,
-    HasField' "name" a (Posed Text),
-    MonadState s m,
-    MonadWriter [ProcessDefsError] m
-  ) =>
+  _ =>
   Lens' Definitions (Map Text a) ->
   DefType ->
   a ->
   m ()
 addDef lens deft val = do
-  mval' <- use $ #definitions . lens . at (val ^. #name . to getVal)
+  mval' <- use $ #definitions % lens % at (val ^. #name % to getVal)
   case mval' of
-    Nothing -> #definitions . lens %= M.insert (val ^. #name . to getVal) val
+    Nothing -> #definitions % lens %= M.insert (val ^. #name % to getVal) val
     Just val' ->
       tell [MultipleDecl deft (getVal $ val ^. #name) (getPos $ val ^. #name) (getPos $ val' ^. #name)]
