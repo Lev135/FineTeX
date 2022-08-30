@@ -13,8 +13,8 @@ jobs:
     - uses: actions/checkout@v3
     - uses: actions/setup-haskell@v1
       with:
-        ghc-version: '8.10.3'
-        cabal-version: '3.2'
+        ghc-version: '9.4.2'
+        cabal-version: '3.6'
 
     - name: Cache
       uses: actions/cache@v3
@@ -37,14 +37,14 @@ jobs:
     - name: Run
       run: |
         ls ./examples/
-        mkdir test
+        mkdir github-test-output
         for src in $(find ./examples/ -name '*.ttex')
         do
           echo "Testing $src"
           base="$(basename $src .ttex)"
           dir="$(dirname $src)"
           
-          curOut="./test/$base.tex"
+          curOut="./github-test-output/$base.tex"
           savedOut="$dir/$base.tex"
           
           cabal run texgen -- "$src" -o $curOut
@@ -58,7 +58,7 @@ jobs:
           base="$(basename $src .ttex)"
           dir="$(dirname $src)"
           
-          curOut="./test/$base.tex"
+          curOut="./github-test-output/$base.tex"
           savedOut="$dir/$base.tex"
           
           echo "Printing diff $curOut $savedOut"
