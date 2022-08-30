@@ -1,15 +1,16 @@
+{-# OPTIONS_GHC -Wno-missing-exported-signatures #-}
+{-# OPTIONS_GHC -Wno-missing-signatures #-}
+
 module Parser.Definitions where
 
-import Data.Void (Void)
 import FineTeX.Parser.Definitions
-import FineTeX.Parser.Syntax
 import FineTeX.Parser.Utils (Posed (Posed))
 import Test.Hspec
 import Test.Hspec.Megaparsec
 import qualified Text.Megaparsec as MP
 import qualified Text.Megaparsec.Char as MP
 
-pos a = Posed a undefined
+pos = Posed undefined
 
 parseAll p = MP.parse (p <* MP.eof) ""
 

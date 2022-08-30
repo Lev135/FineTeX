@@ -14,70 +14,67 @@ import Data.Maybe (fromMaybe)
 import Data.Text (Text)
 import qualified Data.Text as T
 import FineTeX.Parser.Syntax
+import FineTeX.Parser.Utils (Posed, getVal)
 import FineTeX.Processor.Syntax
 import FineTeX.Processor.Tokenizer (TokenizeError (NoWayTokenize), tokenize)
-import FineTeX.Utils (Box (unBox), localState, spanMaybe)
+import FineTeX.Utils (localState, spanMaybe)
 import Prelude hiding (Word)
 
-type MonadM m p =
-  ( Box p,
-    MonadReader (Definitions p) m,
+type MonadM m =
+  ( MonadReader Definitions m,
     MonadState ModeName m,
     MonadWriter [TokenizeError Id Char] m
   )
 
 -- | Document after substitution environments' and prefs' definitions
-data WordDocElement word p
+data WordDocElement word
   = -- | ~ 'GDocParagraph'
-    WDocParagraph [word p]
+    WDocParagraph [word]
   | -- | First block contains @\@Begin@ option, last --- @\@End@
-    WDocEnvironment ModeName [word p] (EnvBody (WordDocElement word) p) [word p]
+    WDocEnvironment ModeName [word] (EnvBody (WordDocElement word)) [word]
   | -- | First block contains @\@Pref@ option, last --- @\@Suff@ and
     -- (for every pref item, excluding last) @\@Sep@
-    WDocPrefItem [word p] [WordDocElement word p] [word p]
+    WDocPrefItem [word] [WordDocElement word] [word]
   | -- | ~'GDocEmptyLine'
     WDocEmptyLine
+  deriving (Eq, Show)
 
 -- | 'Word' without 'WWord' & 'WMode' constructors
-data Word' p
+data Word'
   = -- | String, that will be printed in output as it is, without any processing
-    WString' (p Text)
+    WString' (Posed Text)
   | -- | Space will be printed as space or eol
     WSpace'
   | -- | Group of words. Printer will try not to split it between lines
-    WGroup' [Word' p]
-
-deriving instance Box p => Eq (Word' p)
-
-deriving instance Box p => Show (Word' p)
-
-deriving instance (Show (word p), Box p) => Show (WordDocElement word p)
+    WGroup' [Word']
+  deriving (Eq, Show)
 
 -- | Process body in two stages:
 --
 -- 1. todo
 -- 2. todo
-processBody :: MonadM m p => [DocElement p] -> m [WordDocElement Word' p]
+processBody :: MonadM m => [DocElement] -> m [WordDocElement Word']
 processBody = bodyToWords >=> wordsToWords'
 
-bodyToWords :: MonadM m p => [DocElement p] -> m [WordDocElement Word p]
+bodyToWords :: MonadM m => [DocElement] -> m [WordDocElement Word]
 bodyToWords = (localState . mapM elToWord) . groupPrefs
 
-wordsToWords' :: MonadM m p => [WordDocElement Word p] -> m [WordDocElement Word' p]
+wordsToWords' :: MonadM m => [WordDocElement Word] -> m [WordDocElement Word']
 wordsToWords' = mapM elReplaceTokens
 
-data GroupDocElement p
+data GroupDocElement
   = -- | Paragraph elements, not split on lines (eols are replaced by WordSpace)
-    GDocParagraph [ParEl p]
+    GDocParagraph [ParEl]
   | -- | Environment
-    GDocEnvironment (p Text) [ArgVal p] (EnvBody GroupDocElement p)
+    GDocEnvironment (Posed Text) [ArgVal] (EnvBody GroupDocElement)
   | -- | Group of prefs
-    GDocPrefGroup (p Text) [([ArgVal p], [GroupDocElement p])]
+    GDocPrefGroup (Posed Text) [([ArgVal], [GroupDocElement])]
   | -- | Empty line
     GDocEmptyLine
+  deriving (Eq, Show)
 
 -- | Group prefixes and unline paragraphs.
-groupPrefs :: Box p => [DocElement p] -> [GroupDocElement p]
+groupPrefs :: [DocElement] -> [GroupDocElement]
 groupPrefs = repeatedly h . removeComments
   where
     removeComments = filter $ \case
@@ -104,24 +101,24 @@ groupPrefs = repeatedly h . removeComments
       DocCommentLine _ ->
         error "Comment found, removeComments should be called before this function"
 
-elToWord :: MonadM m p => GroupDocElement p -> m (WordDocElement Word p)
+elToWord :: MonadM m => GroupDocElement -> m (WordDocElement Word)
 elToWord = \case
   GDocParagraph parels -> WDocParagraph <$> concatMapM parElToWords parels
   GDocEnvironment name argvs body -> do
     defs <- curModeDefs
-    let env = defs ^. envs . at (unBox name) . non (error "unexpected env")
+    let env = defs ^. envs . at (getVal name) . non (error "unexpected env")
         beg' = substArgs' (env ^. args) argvs (env ^. begin)
         end' = substArgs' (env ^. args) argvs (env ^. end)
     curMode <- get
-    let mode = fromMaybe curMode $ env ^? inner . _NoVerb . innerModeName . to unBox
+    let mode = fromMaybe curMode $ env ^? inner . _NoVerb . innerModeName . to getVal
     body' <- localState $ do
       put mode
       mapMEnvBody (mapM elToWord) body
     return $ WDocEnvironment mode beg' body' end'
   GDocPrefGroup name items -> do
     defs <- curModeDefs
-    let pref = defs ^. prefs . at (unBox name) . non (error "unexpected pref")
-    let mode = pref ^. innerModeName . to unBox
+    let pref = defs ^. prefs . at (getVal name) . non (error "unexpected pref")
+    let mode = pref ^. innerModeName . to getVal
     let mkWords (isLast, (argvs, els)) = do
           let beg' = substArgs' (pref ^. args) argvs (pref ^. FineTeX.Parser.Syntax.pref)
               end' = substArgs' (pref ^. args) argvs (pref ^. suf <> if isLast then [] else pref ^. sep)
@@ -138,7 +135,7 @@ elToWord = \case
         (pref ^. end . to (substArgs' [] []))
   GDocEmptyLine -> return WDocEmptyLine
 
-parElToWords :: MonadM m p => ParEl p -> m [Word p]
+parElToWords :: MonadM m => ParEl -> m [Word]
 parElToWords = \case
   ParText ws -> pure $
     flip map ws $ \case
@@ -147,7 +144,7 @@ parElToWords = \case
   ParInline name parEls -> do
     defs <- curModeDefs
     let inl = defs ^. inlines . at name . non (error "unexpected inline")
-    let mode = inl ^. innerModeName . to unBox
+    let mode = inl ^. innerModeName . to getVal
     parEls' <- localState $ do
       put mode
       mapM parElToWords parEls
@@ -159,50 +156,51 @@ parElToWords = \case
       ]
 
 -- | Term of the right part of rules, sections of prefs and envs
-data RuleTerm' p
+data RuleTerm'
   = -- | String constant
-    RTString' (p Text)
+    RTString' (Posed Text)
   | -- | Space symbol
     RTSpace'
   | -- | Rule terms need to be processed in particular mode
     -- (if Nothing, current mode is used)
-    RTRun' (Maybe (p ModeName)) [RuleTerm' p]
+    RTRun' (Maybe (Posed ModeName)) [RuleTerm']
+  deriving (Eq, Show)
 
-substArgs' :: Box p => [Argument p] -> [ArgVal p] -> [RuleTerm p] -> [Word p]
+substArgs' :: [Argument] -> [ArgVal] -> [RuleTerm] -> [Word]
 substArgs' args argvs = map ruleTerm'ToWord . substArgs args argvs
 
-substArgs :: forall p. Box p => [Argument p] -> [ArgVal p] -> [RuleTerm p] -> [RuleTerm' p]
+substArgs :: [Argument] -> [ArgVal] -> [RuleTerm] -> [RuleTerm']
 substArgs args argvs = map repl
   where
-    replMap = M.fromList $ zip ((\Argument {_name} -> unBox _name) <$> args) argvs
-    repl :: RuleTerm p -> RuleTerm' p
+    replMap = M.fromList $ zip ((\Argument {_name} -> getVal _name) <$> args) argvs
+    repl :: RuleTerm -> RuleTerm'
     repl = \case
       RTString s -> RTString' s
-      RTVar varName -> case M.lookup (unBox varName) replMap of
+      RTVar varName -> case M.lookup (getVal varName) replMap of
         Nothing -> error $ "Unexpected varriable " <> show varName -- TODO: fix it
         Just (AVString s) -> RTString' s
         Just (AVSort _) -> error "Sort arguments not realized yet" -- TODO: fix it
       RTSpace -> RTSpace'
       RTRun mode rts -> RTRun' mode (repl <$> rts)
 
-ruleTerm'ToWord :: Box p => RuleTerm' p -> Word p
+ruleTerm'ToWord :: RuleTerm' -> Word
 ruleTerm'ToWord = \case
   RTString' s -> WString s
   RTSpace' -> WSpace
   RTRun' Nothing rts -> WGroup (h <$> rts)
-  RTRun' (Just mode) rts -> WMode (unBox mode) (h <$> rts)
+  RTRun' (Just mode) rts -> WMode (getVal mode) (h <$> rts)
   where
     h = \case
       RTString' s -> WWord s
       RTSpace' -> WSpace
       RTRun' _ _ -> error "Unexpected run" -- TODO: fix it
 
-curModeDefs :: MonadM m p => m (InModeDefs p)
+curModeDefs :: MonadM m => m InModeDefs
 curModeDefs = do
   modeName <- get
-  view $ inModes . ix modeName . to unBox
+  view $ inModes . ix modeName . to getVal
 
-elReplaceTokens :: MonadM m p => WordDocElement Word p -> m (WordDocElement Word' p)
+elReplaceTokens :: MonadM m => WordDocElement Word -> m (WordDocElement Word')
 elReplaceTokens = \case
   WDocParagraph ws ->
     WDocParagraph . join <$> mapM replaceTokens ws
@@ -220,13 +218,13 @@ elReplaceTokens = \case
     return $ WDocPrefItem bws' els' ews'
   WDocEmptyLine -> return WDocEmptyLine
 
-replaceTokens :: forall m p. MonadM m p => Word p -> m [Word' p]
+replaceTokens :: forall m. MonadM m => Word -> m [Word']
 replaceTokens = \case
   WString s -> pure [WString' s]
   WWord w -> do
     defs <- curModeDefs
     let rls = defs ^. rules
-    ws' <- case tokenize (defs ^. tokMap) (T.unpack $ unBox w) of
+    ws' <- case tokenize (defs ^. tokMap) (T.unpack $ getVal w) of
       Left NoWayTokenize {} ->
         pure [WString w]
       Left es ->
@@ -242,14 +240,14 @@ replaceTokens = \case
     ws' <- join <$> mapM replaceTokens ws
     return [WGroup' ws']
   where
-    repl :: M.Map VarName String -> RuleTerm p -> [Word p]
+    repl :: M.Map VarName String -> RuleTerm -> [Word]
     repl m = \case
       RTString ps -> [WString ps]
       RTVar pv -> [WString (T.pack . (m M.!) <$> pv)]
       RTSpace -> [WSpace]
       RTRun _ _ -> error "Run non realized"
 
-subst :: Box p => M.Map VarName String -> RuleTerm p -> Word p
+subst :: M.Map VarName String -> RuleTerm -> Word
 subst substMap = \case
   RTString s -> WString s
   RTVar var -> WString (T.pack . (substMap M.!) <$> var)

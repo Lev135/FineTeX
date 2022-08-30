@@ -45,27 +45,6 @@ localState ma = do
 
 type Pos = (SourcePos, SourcePos)
 
-class
-  ( Traversable p,
-    (forall a. Eq a => Eq (p a)),
-    (forall a. Ord a => Ord (p a)),
-    (forall a. Show a => Show (p a))
-  ) =>
-  Box p
-  where
-  unBox :: p a -> a
-
-type Wrap p x = p (x p)
-
-foldMapBox :: Box p => (a -> b) -> p a -> b
-foldMapBox f pa = unBox $ f <$> pa
-
-sequenceBox :: (Functor f, Box p) => p (f a) -> f (p a)
-sequenceBox pma = (<$ pma) <$> unBox pma
-
-class Box p => PosC p where
-  getPos :: p a -> Pos
-
 type Sources = Map FilePath [Text]
 
 class PrettyErr e where

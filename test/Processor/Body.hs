@@ -20,9 +20,9 @@ import GHC.Exts (IsList (..))
 import Test.Hspec (SpecWith, describe, it, shouldBe)
 
 instance s ~ Text => IsString (Posed s) where
-  fromString str = Posed (T.pack str) undefined
+  fromString str = Posed undefined (T.pack str)
 
-instance IsString (WordOrSpace Posed) where
+instance IsString WordOrSpace where
   fromString str = ParWord (fromString str)
 
 -- takeEL :: [DocElement Posed] -> [DocElement Posed]

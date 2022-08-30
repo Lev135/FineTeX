@@ -46,15 +46,14 @@ import Data.Void (Void)
 import FineTeX.Parser.Body (curModeName, defaultState, pBody)
 import FineTeX.Parser.Definitions (pDefBlock, pImportFilenames)
 import FineTeX.Parser.Syntax (DocElement, Word)
-import FineTeX.Parser.Utils (Posed)
+import FineTeX.Parser.Utils (Posed (..))
 import FineTeX.Printer (Ann (..), PrefTabMode (..), PrintOpts (..), prettyDoc)
 import FineTeX.Processor.Body (Word', WordDocElement, bodyToWords, processBody, wordsToWords')
 import FineTeX.Processor.Definitions (ProcessDefsError, initState, processDefs)
 import qualified FineTeX.Processor.Definitions as ProcDefs
-import FineTeX.Processor.Syntax (Id)
-import qualified FineTeX.Processor.Syntax
+import FineTeX.Processor.Syntax (Definitions, Id)
 import FineTeX.Processor.Tokenizer (TokenizeError)
-import FineTeX.Utils (Box (..), Pos, PosC (..), PrettyErr (..), Sources, prettyPos, renderErrors, withError)
+import FineTeX.Utils (Pos, PrettyErr (..), Sources, prettyPos, renderErrors, withError)
 import qualified Prettyprinter as P
 import qualified Prettyprinter.Render.Text as PR
 import System.IO (Handle)
@@ -62,18 +61,15 @@ import Text.Megaparsec (MonadParsec (eof, getParserState), ParseErrorBundle, Sta
 import Prelude hiding (Word)
 
 -- | Alias for processed body of FineTeX document
-type Document = [WordDocElement Word' Posed]
-
--- | Alias for processed definitions block of FineTeX document
-type Definitions = FineTeX.Processor.Syntax.Definitions Posed
+type Document = [WordDocElement Word']
 
 -- Type aliases for debug processing
 
 -- | Alias for init document (DEBUG)
-type InitDocument = [DocElement Posed]
+type InitDocument = [DocElement]
 
 -- | Alias for word document (DEBUG)
-type WordDocument = [WordDocElement Word Posed]
+type WordDocument = [WordDocElement Word]
 
 -- | Alias for word' document (DEBUG)
 type Word'Document = Document
@@ -231,8 +227,8 @@ parseDefsImpl readFile base fileName = do
         parse ((,) <$> pImportFilenames <*> getParserState) fileName file
   defs <- do
     let h pf =
-          withError (ImportError (unBox pf) (getPos pf)) $
-            parseDefSource readFile base' $ unBox pf
+          withError (ImportError (getVal pf) (getPos pf)) $
+            parseDefSource readFile base' $ getVal pf
     mconcat <$> mapM h impFNames
   (defs', state'') <- do
     let (state'', mdefs') = runParser' pDefBlock state'

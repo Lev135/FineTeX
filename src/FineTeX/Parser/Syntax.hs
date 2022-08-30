@@ -7,84 +7,93 @@ module FineTeX.Parser.Syntax where
 
 import Control.Lens (makeFieldsNoPrefix, makePrisms)
 import Data.Text (Text)
-import FineTeX.Utils (Box)
+import FineTeX.Parser.Utils (Posed)
 import Prelude hiding (Word)
 
-data Document p = Document
-  { _imports :: [Import p],
-    _definitions :: DefBlock p,
-    _body :: [DocElement p]
+data Document = Document
+  { _imports :: [Import],
+    _definitions :: DefBlock,
+    _body :: [DocElement]
   }
   deriving (Eq, Show)
 
 -- * Imports
 
-newtype Import p = Import
-  { _filename :: p Text
+newtype Import = Import
+  { _filename :: Posed Text
   }
+  deriving (Eq, Show)
 
 type ModeName = Text
 
 -- * Definitions
 
 -- | Block of definitions (@\@Define@)
-type DefBlock p = [DefSubBlock p]
+type DefBlock = [DefSubBlock]
 
 -- | Subblock of definitions
-data DefSubBlock p
+data DefSubBlock
   = -- | Mode block definition (@\@Modes@)
-    DefModeBlock [DefMode p]
+    DefModeBlock [DefMode]
   | -- | Sort block definition (@\@Sorts@)
-    DefSortBlock [DefSort p]
+    DefSortBlock [DefSort]
   | -- | Block of definitions in specific mode (@\@In <modeName>@)
-    DefInModeBlock (p ModeName) [DefInModeBlock p]
+    DefInModeBlock (Posed ModeName) [DefInModeBlock]
+  deriving (Eq, Show)
 
-data DefInModeBlock p
+data DefInModeBlock
   = -- | @\@Environments@
-    DefEnvBlock [DefEnvironment p]
+    DefEnvBlock [DefEnvironment]
   | -- | @\@Rules@ (in old versions @\@Commands@)
-    DefRuleBlock [DefRule p]
+    DefRuleBlock [DefRule]
   | -- | @\@Prefs@
-    DefPrefBlock [DefPref p]
+    DefPrefBlock [DefPref]
   | -- | @\@Inlines@
-    DefInlBlock [DefInline p]
+    DefInlBlock [DefInline]
+  deriving (Eq, Show)
 
-newtype DefMode p = DefMode
-  {_name :: p Text}
+newtype DefMode = DefMode
+  {_name :: Posed Text}
+  deriving (Eq, Show)
 
-data DefSort p = DefSort
-  { _name :: p Text,
-    _val :: SortExp p
+data DefSort = DefSort
+  { _name :: Posed Text,
+    _val :: SortExp
   }
+  deriving (Eq, Show)
 
-data DefEnvironment p = DefEnvironment
-  { _name :: p Text,
-    _begin, _end :: [RuleTerm p],
-    _args :: [Argument p],
-    _inner :: EnvInner p
+data DefEnvironment = DefEnvironment
+  { _name :: Posed Text,
+    _begin, _end :: [RuleTerm],
+    _args :: [Argument],
+    _inner :: EnvInner
   }
+  deriving (Eq, Show)
 
-data DefPref p = DefPref
-  { _name :: p Text,
-    _begin, _end :: [RuleTerm p],
-    _args :: [Argument p],
-    _pref, _suf, _sep :: [RuleTerm p],
-    _innerModeName :: p Text,
+data DefPref = DefPref
+  { _name :: Posed Text,
+    _begin, _end :: [RuleTerm],
+    _args :: [Argument],
+    _pref, _suf, _sep :: [RuleTerm],
+    _innerModeName :: Posed Text,
     _noPrefInside :: Bool
   }
+  deriving (Eq, Show)
 
-data DefRule p = DefRule
+data DefRule = DefRule
   { -- | Left side of rule definition
-    _match :: PatMatchExp p,
+    _match :: PatMatchExp,
     -- | Right side of rule definition
-    _rule :: [RuleTerm p]
+    _rule :: [RuleTerm]
   }
+  deriving (Eq, Show)
 
-data DefInline p = DefInline
-  { _borders :: (p Text, p Text),
-    _begin, _end :: [RuleTerm p],
-    _innerModeName :: p Text
+data DefInline = DefInline
+  { _borders :: (Posed Text, Posed Text),
+    _begin, _end :: [RuleTerm],
+    _innerModeName :: Posed Text
   }
+  deriving (Eq, Show)
 
 -- * Parts of definitions
 
@@ -93,198 +102,123 @@ data DefInline p = DefInline
 -- | Type of environment body. Can be
 -- - Normal ('NoVerb'), i. e. environment contains FineTeX code in some mode.
 -- - Verbatim ('Verb'). If 'Bool' is True indentation will be also preserved.
-data EnvInner p = NoVerb (EnvNoVerb p) | Verb Bool
+data EnvInner = NoVerb EnvNoVerb | Verb Bool
+  deriving (Eq, Show)
 
-data EnvNoVerb p = EnvNoVerb
-  { _innerModeName :: p Text,
+data EnvNoVerb = EnvNoVerb
+  { _innerModeName :: Posed Text,
     _noPrefInside :: Bool
   }
+  deriving (Eq, Show)
 
 -- ** Sorts of strings and rules patterns
 
-data PatMatchExp p = PatMatchExp
-  { _behind, _ahead :: SortExp p,
-    _current :: [PatMatchEl p]
+data PatMatchExp = PatMatchExp
+  { _behind, _ahead :: SortExp,
+    _current :: [PatMatchEl]
   }
+  deriving (Eq, Show)
 
 -- | Pattern match element
 -- @ '(' var ':' sort ')'  |  sort @
-data PatMatchEl p = PatMatchEl
-  { _var :: Maybe (p VarName),
-    _sort :: SortExp p
+data PatMatchEl = PatMatchEl
+  { _var :: Maybe (Posed VarName),
+    _sort :: SortExp
   }
+  deriving (Eq, Show)
 
 type VarName = Text
 
 type SortName = Text
 
 -- |  Sort of string. Something like RegExps without stars (at the moment)
-data SortExp p
+data SortExp
   = -- | Match only this string
-    SEString (p Text)
+    SEString (Posed Text)
   | -- | Match some spaces/tabs/eols
     SESpace
   | -- | Match a sort with this name
-    SESort (p SortName)
+    SESort (Posed SortName)
   | -- | Match nothing (always fails). Identity of 'SEOr'
     SEVoid
   | -- | Match empty string. Identity of 'SEConcat'
     SEEmpty
   | -- | Match two sorts consequently
-    SEConcat (SortExp p) (SortExp p)
+    SEConcat SortExp SortExp
   | -- | Match one sort or another
-    SEOr (SortExp p) (SortExp p)
+    SEOr SortExp SortExp
+  deriving (Eq, Show)
 
 -- | Term of the right part of rules, sections of prefs and envs
-data RuleTerm p
+data RuleTerm
   = -- | String constant
-    RTString (p Text)
+    RTString (Posed Text)
   | -- | Matched variable (identifier)
-    RTVar (p VarName)
+    RTVar (Posed VarName)
   | -- | Space/eol symbol
     RTSpace
   | -- | Rule terms need to be processed in particular mode
     -- (if Nothing, current mode is used)
-    RTRun (Maybe (p ModeName)) [RuleTerm p]
+    RTRun (Maybe (Posed ModeName)) [RuleTerm]
+  deriving (Eq, Show)
 
 -- ** Arguments
 
-data Argument p = Argument
-  { _name :: p Text,
-    _kind :: ArgKind p
+data Argument = Argument
+  { _name :: Posed Text,
+    _kind :: ArgKind
   }
+  deriving (Eq, Show)
 
-data ArgKind p = AKString | AKSort (SortExp p)
+data ArgKind = AKString | AKSort SortExp
   deriving (Eq, Show)
 
 -- * Document body
 
-data DocElement p
-  = DocParLine [ParEl p]
-  | DocEnvironment (p Text) [ArgVal p] (EnvBody DocElement p)
-  | DocPref (p Text) [ArgVal p] [DocElement p]
+data DocElement
+  = DocParLine [ParEl]
+  | DocEnvironment (Posed Text) [ArgVal] (EnvBody DocElement)
+  | DocPref (Posed Text) [ArgVal] [DocElement]
   | DocEmptyLine
-  | DocCommentLine (p Text)
+  | DocCommentLine (Posed Text)
+  deriving (Eq, Show)
 
-data ParEl p
-  = ParText [WordOrSpace p]
-  | ParInline Text [ParEl p]
+data ParEl
+  = ParText [WordOrSpace]
+  | ParInline Text [ParEl]
+  deriving (Eq, Show)
 
-data EnvBody el p
-  = VerbBody Bool [p Text]
-  | NoVerbBody [el p]
+data EnvBody el
+  = VerbBody Bool [Posed Text]
+  | NoVerbBody [el]
+  deriving (Eq, Show)
 
-mapEnvBody :: ([el p] -> [el' p]) -> EnvBody el p -> EnvBody el' p
+mapEnvBody :: ([el] -> [el']) -> EnvBody el -> EnvBody el'
 mapEnvBody _ (VerbBody b els) = VerbBody b els
 mapEnvBody f (NoVerbBody els) = NoVerbBody $ f els
 
-mapMEnvBody :: Applicative m => ([el p] -> m [el' p]) -> EnvBody el p -> m (EnvBody el' p)
+mapMEnvBody :: Applicative m => ([el] -> m [el']) -> EnvBody el -> m (EnvBody el')
 mapMEnvBody _ (VerbBody b els) = pure $ VerbBody b els
 mapMEnvBody f (NoVerbBody els) = NoVerbBody <$> f els
 
-data Word p
+data Word
   = -- | String, that will be printed in output as it is, without any processing
-    WString (p Text)
+    WString (Posed Text)
   | -- | Word to be tokenized. Tokens will be replaced by command rules
-    WWord (p Text)
+    WWord (Posed Text)
   | -- | Space will be printed as space or eol
     WSpace
   | -- | Group of words in some mode
-    WMode ModeName [Word p]
+    WMode ModeName [Word]
   | -- | Group of words. Printer will try not to split it between lines
-    WGroup [Word p]
+    WGroup [Word]
+  deriving (Eq, Show)
 
-data WordOrSpace p = ParWord (p Text) | ParSpace
+data WordOrSpace = ParWord (Posed Text) | ParSpace
+  deriving (Eq, Show)
 
-data ArgVal p = AVString (p Text) | AVSort (p Text)
-
-deriving instance Box p => Show (Import p)
-
-deriving instance Box p => Show (DefSubBlock p)
-
-deriving instance Box p => Show (DefInModeBlock p)
-
-deriving instance Box p => Show (DefMode p)
-
-deriving instance Box p => Show (DefEnvironment p)
-
-deriving instance Box p => Show (DefPref p)
-
-deriving instance Box p => Show (DefInline p)
-
-deriving instance Box p => Show (Word p)
-
-deriving instance Box p => Show (EnvInner p)
-
-deriving instance Box p => Show (EnvNoVerb p)
-
-deriving instance Box p => Show (Argument p)
-
-deriving instance Box p => Show (DocElement p)
-
-deriving instance Box p => Show (ParEl p)
-
-deriving instance (Show (el p), Box p) => Show (EnvBody el p)
-
-deriving instance Box p => Show (WordOrSpace p)
-
-deriving instance Box p => Show (ArgVal p)
-
-deriving instance Box p => Show (DefSort p)
-
-deriving instance Box p => Show (DefRule p)
-
-deriving instance Box p => Show (RuleTerm p)
-
-deriving instance Box p => Show (PatMatchExp p)
-
-deriving instance Box p => Show (PatMatchEl p)
-
-deriving instance Box p => Show (SortExp p)
-
-deriving instance Box p => Eq (Import p)
-
-deriving instance Box p => Eq (DefSubBlock p)
-
-deriving instance Box p => Eq (DefInModeBlock p)
-
-deriving instance Box p => Eq (DefMode p)
-
-deriving instance Box p => Eq (DefEnvironment p)
-
-deriving instance Box p => Eq (EnvInner p)
-
-deriving instance Box p => Eq (EnvNoVerb p)
-
-deriving instance Box p => Eq (DefPref p)
-
-deriving instance Box p => Eq (DefRule p)
-
-deriving instance Box p => Eq (DefInline p)
-
-deriving instance Box p => Eq (Word p)
-
-deriving instance Box p => Eq (Argument p)
-
-deriving instance Box p => Eq (DocElement p)
-
-deriving instance Box p => Eq (ParEl p)
-
-deriving instance (Eq (el p), Box p) => Eq (EnvBody el p)
-
-deriving instance Box p => Eq (WordOrSpace p)
-
-deriving instance Box p => Eq (ArgVal p)
-
-deriving instance Box p => Eq (DefSort p)
-
-deriving instance Box p => Eq (RuleTerm p)
-
-deriving instance Box p => Eq (PatMatchExp p)
-
-deriving instance Box p => Eq (PatMatchEl p)
-
-deriving instance Box p => Eq (SortExp p)
+data ArgVal = AVString (Posed Text) | AVSort (Posed Text)
+  deriving (Eq, Show)
 
 makeFieldsNoPrefix ''Document
 makeFieldsNoPrefix ''Import

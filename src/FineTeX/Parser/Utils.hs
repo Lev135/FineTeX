@@ -1,3 +1,4 @@
+{-# LANGUAGE DeriveFunctor #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE QuantifiedConstraints #-}
 {-# LANGUAGE UndecidableInstances #-}
@@ -14,7 +15,7 @@ import qualified Data.Map as M
 import Data.Text (Text)
 import qualified Data.Text as T
 import Data.Void (Void)
-import FineTeX.Utils (Box (..), Pos, PosC (..), failMsg, foldMapBox, sequenceBox)
+import FineTeX.Utils (Pos, failMsg)
 import GHC.Stack (HasCallStack)
 import Text.Megaparsec
   ( ErrorItem (Label),
@@ -45,38 +46,30 @@ import qualified Text.Megaparsec.Char.Lexer as L
 
 type ParserM m = (MonadParsec Void Text m, MonadFail m)
 
-data Posed a = Posed {val :: a, pos :: Pos}
+data Posed a = Posed {getPos :: Pos, getVal :: a}
+  deriving (Functor)
 
 instance Eq a => Eq (Posed a) where
-  (==) = (==) `on` unBox
+  (==) = (==) `on` getVal
 
 instance Ord a => Ord (Posed a) where
-  (<=) = (<=) `on` unBox
+  (<=) = (<=) `on` getVal
 
 instance Show a => Show (Posed a) where
-  show Posed {val} = show val -- show (b, e) <> ": " <> show val
-
-instance Box Posed where
-  unBox = val
-
-instance PosC Posed where
-  getPos = pos
-
-instance Functor Posed where
-  fmap f Posed {val, pos} = Posed {val = f val, pos = pos}
+  show = show . getVal
 
 instance Foldable Posed where
-  foldMap = foldMapBox
+  foldMap f = f . getVal
 
-instance Traversable Posed where
-  sequenceA = sequenceBox
+sequencePosed :: Functor f => Posed (f a) -> f (Posed a)
+sequencePosed (Posed p ma) = Posed p <$> ma
 
 withPos :: ParserM m => m a -> m (Posed a)
 withPos pa = do
   b <- getSourcePos
   a <- pa
   e <- getSourcePos
-  return $ Posed a (b, e)
+  return $ Posed (b, e) a
 
 -- | parse one space symbol
 space :: ParserM m => m ()
@@ -177,11 +170,11 @@ pWordL = lexeme (takeWhile1P Nothing isWordCh) <?> "Word"
 isWordCh :: Char -> Bool
 isWordCh ch = not $ isSpace ch || ch == '%'
 
-parseMapEl :: (Box p, Ord k, Show k, ParserM m) => Map k a -> String -> m (p k) -> m (p k, a)
+parseMapEl :: (Ord k, Show k, ParserM m) => Map k a -> String -> m (Posed k) -> m (Posed k, a)
 parseMapEl m kType pk = do
   reg <- region . setErrorOffset <$> getOffset
   k <- pk
-  reg $ (k,) <$> (M.lookup (unBox k) m `failMsg` "Undefined " <> kType <> " " <> show k)
+  reg $ (k,) <$> (M.lookup (getVal k) m `failMsg` "Undefined " <> kType <> " " <> show k)
 
 assert :: HasCallStack => (Monad m, Alternative m) => m a -> m ()
 assert p = do

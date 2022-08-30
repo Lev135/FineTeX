@@ -8,7 +8,7 @@ module Dbg
     runReader,
     runWriter,
     runState,
-    unBox,
+    getVal,
     p,
     Definitions,
     Posed,
@@ -22,10 +22,9 @@ import Data.String (IsString (..))
 import qualified Data.Text as T
 import FineTeX.FineTeX
 import FineTeX.Parser.Utils
-import FineTeX.Utils
 
 instance s ~ T.Text => IsString (Posed s) where
-  fromString str = Posed (T.pack str) undefined
+  fromString str = Posed undefined (T.pack str)
 
 p :: a -> Posed a
-p a = Posed a undefined
+p = Posed undefined

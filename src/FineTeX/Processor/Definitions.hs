@@ -22,10 +22,11 @@ import qualified Data.Set as S
 import Data.Text (Text)
 import qualified Data.Text as T
 import FineTeX.Parser.Syntax
+import FineTeX.Parser.Utils (Posed, getPos, getVal, sequencePosed)
 import FineTeX.Processor.Syntax
 import FineTeX.Processor.Tokenizer (BlackWhiteSet (..), BlackWhiteSetList)
 import qualified FineTeX.Processor.Tokenizer as Tok
-import FineTeX.Utils (Box (unBox), Pos, PosC (..), PrettyErr (..), prettyPos, sequenceBox)
+import FineTeX.Utils (Pos, PrettyErr (..), prettyPos)
 import qualified Prettyprinter as P
 import Safe.Exact (splitAtExactNote)
 
@@ -65,27 +66,22 @@ instance PrettyErr ProcessDefsError where
     where
       lbl = "Unknown identifier '" <> name <> "'"
 
-data State p = State
-  { _definitions :: Definitions p,
+data State = State
+  { _definitions :: Definitions,
     _tokens :: [Token]
   }
 
-initState :: Definitions p -> State p
+initState :: Definitions -> State
 initState _definitions = State {_definitions, _tokens = []}
 
-type MState m p =
-  (MonadWriter [ProcessDefsError] m, MonadState (State p) m)
+type MState m = (MonadWriter [ProcessDefsError] m, MonadState State m)
 
 data DefType = DefTEnv | DefTPref | DefTCmd | DefTInl | DefTMode | DefTSort
   deriving (Show)
 
 -- | Processing definitions.
 --   Initial state should contain definitions, imported from other files
-processDefs ::
-  forall m p.
-  (PosC p, MState m p) =>
-  DefBlock p ->
-  m ()
+processDefs :: forall m. MState m => DefBlock -> m ()
 processDefs defs = do
   -- Lay out definitions in appropriate maps and check conflicting names
   procDefBlock defs
@@ -97,7 +93,7 @@ processDefs defs = do
 
 -- TODO: make check for uniquely parsing of commands (rename ~~> tokens? prims?)
 
-procDefBlock :: forall m p. (PosC p, MState m p) => DefBlock p -> m ()
+procDefBlock :: forall m. MState m => DefBlock -> m ()
 procDefBlock = mapM_ $ \case
   DefModeBlock defs -> mapM_ (addDef modes DefTMode) defs
   DefSortBlock defs -> mapM_ procSort defs
@@ -107,11 +103,10 @@ procDefBlock = mapM_ $ \case
     let x = Tok.makeTokenizeMap toks
     lens mode . tokMap <>= x
 
-instance HasName (DefInline p) (p Text) where
+instance HasName DefInline (Posed Text) where
   name = borders . _1
 
-procDefInModeBlock ::
-  forall m p. (PosC p, MState m p) => p Text -> DefInModeBlock p -> m ()
+procDefInModeBlock :: forall m. MState m => Posed Text -> DefInModeBlock -> m ()
 procDefInModeBlock mode = \case
   DefEnvBlock defs ->
     mapM_
@@ -139,46 +134,46 @@ procDefInModeBlock mode = \case
   DefInlBlock defs -> mapM_ (addInMode inlines DefTInl) defs
   where
     addInMode ::
-      HasName (a p) (p Text) =>
-      Lens' (InModeDefs p) (Map Text (a p)) ->
+      HasName a (Posed Text) =>
+      Lens' InModeDefs (Map Text a) ->
       DefType ->
-      (a p -> m ())
-    addInMode lens deft = addDef (inModes . at (unBox mode) . anon (mempty <$ mode) null . h . lens) deft
-    h g pa = sequenceBox $ g <$> pa
+      (a -> m ())
+    addInMode lens deft = addDef (inModes . at (getVal mode) . anon (mempty <$ mode) null . h . lens) deft
+    h g pa = sequencePosed $ g <$> pa
 
-checkRuleTerm :: (PosC p, MState m p) => [Argument p] -> RuleTerm p -> m ()
+checkRuleTerm :: MState m => [Argument] -> RuleTerm -> m ()
 checkRuleTerm args = \case
   RTString _ -> pure ()
   RTVar varName ->
     unless (any (\Argument {_name} -> _name == varName) args) $
-      tell [UnknownIdentifier (unBox varName) (getPos varName)]
+      tell [UnknownIdentifier (getVal varName) (getPos varName)]
   RTSpace -> pure ()
   RTRun modeName terms -> do
     maybe (pure ()) checkMode modeName
     mapM_ (checkRuleTerm args) terms
 
-checkMode :: (PosC p, MState m p) => p Text -> m ()
+checkMode :: MState m => Posed Text -> m ()
 checkMode modeName = do
-  mode <- use (definitions . modes . at (unBox modeName))
+  mode <- use (definitions . modes . at (getVal modeName))
   case mode of
     Just _ -> pure ()
-    Nothing -> tell [UndefinedMode (unBox modeName) (getPos modeName)]
+    Nothing -> tell [UndefinedMode (getVal modeName) (getPos modeName)]
 
-procSort :: DefSort p -> m ()
+procSort :: DefSort -> m ()
 procSort = undefined
 
-lens modeName = definitions . inModes . at (unBox modeName) . anon (mempty <$ modeName) null . h
+lens modeName = definitions . inModes . at (getVal modeName) . anon (mempty <$ modeName) null . h
   where
-    h g pa = sequenceBox $ g <$> pa
+    h g pa = sequencePosed $ g <$> pa
 
-procRuleDef :: forall m p. (PosC p, MState m p) => p ModeName -> DefRule p -> m ()
+procRuleDef :: forall m. MState m => Posed ModeName -> DefRule -> m ()
 procRuleDef modeName DefRule {_match, _rule} = do
   i <- use $ lens modeName . rules . to M.keysSet . to S.lookupMax . to (fmap succ) . non 0
   lens modeName . rules %= M.insert i _rule
   tokAlts <- pmExpToTokenAlts i _match
   tokens <>= tokAlts
 
-pmExpToTokenAlts :: forall m p. (PosC p, MState m p) => Id -> PatMatchExp p -> m [Token]
+pmExpToTokenAlts :: forall m. MState m => Id -> PatMatchExp -> m [Token]
 pmExpToTokenAlts i PatMatchExp {_behind, _current, _ahead} = do
   behindBWs <- expToBWSetListAlts _behind
   aheadBWs <- expToBWSetListAlts _ahead
@@ -193,7 +188,7 @@ pmExpToTokenAlts i PatMatchExp {_behind, _current, _ahead} = do
     ]
   where
     h ::
-      (Maybe (p VarName), [BlackWhiteSetList Char]) ->
+      (Maybe (Posed VarName), [BlackWhiteSetList Char]) ->
       [(String -> Map VarName String, BlackWhiteSetList Char)] ->
       [(String -> Map VarName String, BlackWhiteSetList Char)]
     h (curVar, curList) xs = [(makef' f s', s <> s') | (f, s) <- xs, s' <- curList]
@@ -205,7 +200,7 @@ pmExpToTokenAlts i PatMatchExp {_behind, _current, _ahead} = do
           Map VarName String
         makef' f curBWSetList str =
           let (curStr, str') = splitAtExactNote "Too small str" (length curBWSetList) str
-           in case unBox <$> curVar of
+           in case getVal <$> curVar of
                 Nothing -> f str'
                 Just varName -> M.insert varName curStr (f str')
 
@@ -214,17 +209,17 @@ toSet (WhiteSet s) = s
 toSet (BlackSet _) = error "Black set" -- TODO: fix it
 
 -- | Make a 'BlackWhiteSetList's equivalent (as a disjunction) to 'SortExp'
-expToBWSetListAlts :: forall m p. (PosC p, MState m p) => SortExp p -> m [BlackWhiteSetList Char]
+expToBWSetListAlts :: forall m. MState m => SortExp -> m [BlackWhiteSetList Char]
 expToBWSetListAlts = \case
-  SEString str -> pure [Tok.fromConcrete (T.unpack $ unBox str)]
+  SEString str -> pure [Tok.fromConcrete (T.unpack $ getVal str)]
   SESpace -> pure [[Tok.singleton ' ']]
   SESort sortName -> do
-    mz <- use $ definitions . sorts . at (unBox sortName)
+    mz <- use $ definitions . sorts . at (getVal sortName)
     case mz of
       Nothing -> do
-        tell [UndefinedSort (unBox sortName) (getPos sortName)]
+        tell [UndefinedSort (getVal sortName) (getPos sortName)]
         pure []
-      Just toks -> pure $ unBox toks
+      Just toks -> pure $ getVal toks
   SEConcat e e' -> do
     bws <- expToBWSetListAlts e
     bws' <- expToBWSetListAlts e'
@@ -237,20 +232,20 @@ expToBWSetListAlts = \case
   SEEmpty -> pure [[]]
 
 addDef ::
-  forall m p a.
-  (PosC p, MState m p, HasName (a p) (p Text)) =>
-  Lens' (Definitions p) (Map Text (a p)) ->
+  forall m a.
+  (MState m, HasName a (Posed Text)) =>
+  Lens' Definitions (Map Text a) ->
   DefType ->
-  a p ->
+  a ->
   m ()
 addDef lens deft val = do
-  mval' <- use $ definitions . lens . at (val ^. name . to unBox)
+  mval' <- use $ definitions . lens . at (val ^. name . to getVal)
   case mval' of
-    Nothing -> definitions . lens %= M.insert (val ^. name . to unBox) val
+    Nothing -> definitions . lens %= M.insert (val ^. name . to getVal) val
     Just val' ->
-      tell [MultipleDecl deft (unBox $ val ^. name) (getPos $ val ^. name) (getPos $ val' ^. name)]
+      tell [MultipleDecl deft (getVal $ val ^. name) (getPos $ val ^. name) (getPos $ val' ^. name)]
 
-instance HasDefinitions (State p_a1m9hb) (Definitions p_a1m9hb) where
+instance HasDefinitions State Definitions where
   {-# INLINE definitions #-}
   definitions f_a1ma8U (State x1_a1ma8V x3_a1ma8X) =
     fmap
@@ -260,7 +255,7 @@ instance HasDefinitions (State p_a1m9hb) (Definitions p_a1m9hb) where
 class HasTokens s a | s -> a where
   tokens :: Lens' s a
 
-instance HasTokens (State p_a1m9hb) [Token] where
+instance HasTokens State [Token] where
   {-# INLINE tokens #-}
   tokens f_a1ma96 (State x1_a1ma97 x3_a1ma99) =
     fmap

@@ -10,8 +10,8 @@ import Data.List.Extra (split)
 import Data.Maybe (catMaybes)
 import qualified Data.Text as T
 import FineTeX.Parser.Syntax (EnvBody (..))
+import FineTeX.Parser.Utils (Posed (getVal))
 import FineTeX.Processor.Body (Word' (..), WordDocElement (..))
-import FineTeX.Utils (Box (..))
 import Prettyprinter (pretty)
 import qualified Prettyprinter as P
 
@@ -30,13 +30,13 @@ data PrintOpts = PrintOpts
     prefTabMode :: PrefTabMode
   }
 
-prettyDoc :: Box p => PrintOpts -> [WordDocElement Word' p] -> Doc
+prettyDoc :: PrintOpts -> [WordDocElement Word'] -> Doc
 prettyDoc opts = (<> P.line) . prettyEls opts
 
-prettyEls :: Box p => PrintOpts -> [WordDocElement Word' p] -> Doc
+prettyEls :: PrintOpts -> [WordDocElement Word'] -> Doc
 prettyEls opts = P.vcat . map (prettyEl opts)
 
-prettyEl :: Box p => PrintOpts -> WordDocElement Word' p -> Doc
+prettyEl :: PrintOpts -> WordDocElement Word' -> Doc
 prettyEl opts@PrintOpts {tabSize, prefTabMode} = \case
   WDocParagraph ws -> prettyWords ws
   WDocEnvironment _ bws body ews -> P.vcat $ catMaybes [pr bws, pbody, pr ews]
@@ -46,7 +46,7 @@ prettyEl opts@PrintOpts {tabSize, prefTabMode} = \case
         VerbBody _ [] -> Nothing
         VerbBody verbInd ls ->
           let ann = if verbInd then P.annotate NoIndent else id
-           in Just . ann $ P.vsep (pretty . unBox <$> ls)
+           in Just . ann $ P.vsep (pretty . getVal <$> ls)
         NoVerbBody [] -> Nothing
         NoVerbBody els -> Just $ nest $ prettyEls opts els
       nest
@@ -62,12 +62,12 @@ prettyEl opts@PrintOpts {tabSize, prefTabMode} = \case
       els' = prettyEls opts els
   WDocEmptyLine -> P.emptyDoc
 
-prettyWords :: Box p => [Word' p] -> Doc
+prettyWords :: [Word'] -> Doc
 prettyWords = P.fillSep . prettyWordsList
   where
     prettyWordsList = map (mconcat . map h) . filter (not . null) . split (== WSpace')
     h = \case
-      WString' s -> pretty $ unBox s
+      WString' s -> pretty $ getVal s
       WSpace' -> error "Space"
       WGroup' ws -> P.pageWidth $ \pgWidth ->
         P.nesting $ \nestLvl ->
@@ -80,7 +80,7 @@ prettyWords = P.fillSep . prettyWordsList
         . filter (not . null)
         . split (== WSpace')
     wordWidth = \case
-      WString' str -> T.length $ unBox str
+      WString' str -> T.length $ getVal str
       WSpace' -> error "unexpected space (list should be splitted on spaces)"
       WGroup' ws -> wordsWidth ws
     ribbonWidth (P.AvailablePerLine lineLength ribbonFraction) nestLvl =

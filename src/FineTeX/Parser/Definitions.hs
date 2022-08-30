@@ -12,7 +12,6 @@ import Data.Void (Void)
 import FineTeX.Parser.OptParser (OptParser, flagOpt, labelOpt, mkOptP, toParsec, (<??>), (<||>))
 import FineTeX.Parser.Syntax
 import FineTeX.Parser.Utils
-import FineTeX.Utils (Box (..))
 import Text.Megaparsec (MonadParsec (..), Parsec, choice, option, (<?>))
 import Text.Megaparsec.Char (char, string)
 import qualified Text.Megaparsec.Char.Lexer as L
@@ -31,22 +30,22 @@ pImportFilenames =
           (return ())
       )
 
-pDefBlock :: Parser (DefBlock Posed)
+pDefBlock :: Parser DefBlock
 pDefBlock = inEnvironment "Define" id (pDefModesBlock <|> pDefInModeBlock)
 
-pDefModesBlock :: Parser (DefSubBlock Posed)
+pDefModesBlock :: Parser DefSubBlock
 pDefModesBlock = inEnvironment "Modes" DefModeBlock $ do
   _name <- pIdentifierL
   return DefMode {..}
 
-pDefInModeBlock :: Parser (DefSubBlock Posed)
+pDefInModeBlock :: Parser DefSubBlock
 pDefInModeBlock = L.indentBlock scn $ do
   name <- strLexeme "@In" *> pIdentifierL <?> "@In <ModeName>"
   return $
     L.IndentMany Nothing (pure . DefInModeBlock name) $
       choice [pDefEnvBlock name, pDefRuleBlock, pDefPrefBlock name, pDefInlBlock name]
 
-pDefEnvBlock :: Posed Text -> Parser (DefInModeBlock Posed)
+pDefEnvBlock :: Posed Text -> Parser DefInModeBlock
 pDefEnvBlock mode = inEnvironment "Environments" DefEnvBlock $ do
   _name <- pIdentifierL
   _args <- pDefArgs
@@ -72,14 +71,14 @@ pDefEnvBlock mode = inEnvironment "Environments" DefEnvBlock $ do
       return (beginEnd, inner)
   return DefEnvironment {..}
 
-pDefRuleBlock :: Parser (DefInModeBlock Posed)
+pDefRuleBlock :: Parser DefInModeBlock
 pDefRuleBlock = inEnvironment "Commands" DefRuleBlock $ do
   _match <- pPatMatchExp
   strLexeme "="
   _rule <- pRuleTerms
   return DefRule {..}
 
-pDefPrefBlock :: Posed Text -> Parser (DefInModeBlock Posed)
+pDefPrefBlock :: Posed Text -> Parser DefInModeBlock
 pDefPrefBlock mode = inEnvironment "Prefs" DefPrefBlock $ do
   _name <- pPrefixL
   _args <- pDefArgs
@@ -97,7 +96,7 @@ pDefPrefBlock mode = inEnvironment "Prefs" DefPrefBlock $ do
       return (beginEnd, pref, suf, sep, mode, noPref, grouping, oneLine)
   return DefPref {..}
 
-pDefInlBlock :: Posed Text -> Parser (DefInModeBlock Posed)
+pDefInlBlock :: Posed Text -> Parser DefInModeBlock
 pDefInlBlock mode = inEnvironment "Inlines" DefInlBlock $ do
   _borders <- (,) <$> pWordL <*> pWordL
   strLexeme "="
@@ -119,7 +118,7 @@ inArgsEnvironment name f pargs pel = L.indentBlock scn $ do
   return $ L.IndentMany Nothing (pure . f args) pel
 
 pOpt :: OptParser a -> Parser a
-pOpt = toParsec (unBox <$> optNameP) optArgsConsumer
+pOpt = toParsec (getVal <$> optNameP) optArgsConsumer
   where
     optNameP = try (string "@" >> pIdentifierL) <?> "option name `@<name>`"
     optArgsConsumer = takeWhileP Nothing (`notElem` ['@', '\n', '\r', '%'])
@@ -134,21 +133,21 @@ ppPatMatchExp PatMatchExp {_behind, _current, _ahead} =
 
     toStrEl :: PatMatchEl p -> Text
     toStrEl (PatMatchEl var se) = case var of
-      Just v -> "(" <> unBox v <> " : " <> sortToStr se <> ")"
+      Just v -> "(" <> getVal v <> " : " <> sortToStr se <> ")"
       Nothing -> sortToStr se
 
     sortToStr :: SortExp p -> Text
     sortToStr = \case
-      SEString s -> "\"" <> unBox s <> "\""
+      SEString s -> "\"" <> getVal s <> "\""
       SESpace -> "_"
-      SESort sortName -> unBox sortName
+      SESort sortName -> getVal sortName
       SEConcat s1 s2 -> brac s1 (sortToStr s1) <> " " <> brac s2 (sortToStr s2)
       SEOr s1 s2 -> sortToStr s1 <> " | " <> sortToStr s2
 
     brac (SEOr _ _) = \str -> "(" <> str <> ")"
     brac _ = id
 -}
-pPatMatchExp :: Parser (PatMatchExp Posed)
+pPatMatchExp :: Parser PatMatchExp
 pPatMatchExp = do
   _behind <- option SEEmpty h
   _current <- many pPatMatchEl
@@ -162,7 +161,7 @@ pPatMatchExp = do
                  <|> strLexeme "(" *> pSortExp <* strLexeme ")"
              )
 
-pPatMatchEl :: Parser (PatMatchEl Posed)
+pPatMatchEl :: Parser PatMatchEl
 pPatMatchEl = try pSimple <|> pBracet
   where
     pSimple = PatMatchEl Nothing <$> pSortExp
@@ -174,25 +173,25 @@ pPatMatchEl = try pSimple <|> pBracet
       strLexeme ")"
       return PatMatchEl {..}
 
-pSortExp :: Parser (SortExp Posed)
+pSortExp :: Parser SortExp
 pSortExp = makeExprParser pTerm operators
   where
-    pTerm :: Parser (SortExp Posed)
+    pTerm :: Parser SortExp
     pTerm =
       SEString <$> pStringLiteralL
         <|> SESpace <$ strLexeme "_"
         <|> SESort <$> pIdentifierL
         <|> strLexeme "(" *> pSortExp <* strLexeme ")"
-    operators :: [[Operator Parser (SortExp Posed)]]
+    operators :: [[Operator Parser SortExp]]
     operators =
       [ [InfixL (SEConcat <$ notFollowedBy (char '|'))],
         [InfixL (SEOr <$ strLexeme "|")]
       ]
 
-pRuleTerms :: Parser [RuleTerm Posed]
+pRuleTerms :: Parser [RuleTerm]
 pRuleTerms = many pRuleTerm
 
-pRuleTerm :: Parser (RuleTerm Posed)
+pRuleTerm :: Parser RuleTerm
 pRuleTerm =
   RTString <$> pStringLiteralL
     <|> RTVar <$> pIdentifierL
@@ -201,7 +200,7 @@ pRuleTerm =
   where
     pBrackets = char '(' *> some pRuleTerm <* char ')' <|> (: []) <$> pRuleTerm
 
-pBeginEndOpt :: OptParser ([RuleTerm Posed], [RuleTerm Posed])
+pBeginEndOpt :: OptParser ([RuleTerm], [RuleTerm])
 pBeginEndOpt = option ([], []) $ texBEP <||> simpleBEP <??> ["@TexBeginEnd", "@Begin @End"]
   where
     texBEP = do
@@ -216,13 +215,13 @@ pBeginEndOpt = option ([], []) $ texBEP <||> simpleBEP <??> ["@TexBeginEnd", "@B
         ([], []) -> empty
         _ -> return (begin, end)
 
-pArgKind :: Parser (ArgKind Posed)
+pArgKind :: Parser ArgKind
 pArgKind =
   AKString <$ strLexeme "String"
     <|> AKSort <$> pSortExp
       <?> "argument kind 'String' or sort expression"
 
-pDefArgs :: Parser [Argument Posed]
+pDefArgs :: Parser [Argument]
 pDefArgs = many . label "argument `(<name> : <kind>)`" $ do
   try $ strLexeme "("
   _name <- pIdentifierL

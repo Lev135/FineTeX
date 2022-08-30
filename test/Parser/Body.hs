@@ -20,8 +20,7 @@ import FineTeX.FineTeX (Definitions, parseDefSource, runParseT)
 import FineTeX.Parser.Body
 import FineTeX.Parser.Definitions (Parser)
 import FineTeX.Parser.Syntax (ArgVal (AVString), DocElement (..), EnvBody (NoVerbBody, VerbBody), ParEl (ParInline, ParText), WordOrSpace (ParSpace, ParWord))
-import FineTeX.Parser.Utils
-import FineTeX.Utils (Box (..))
+import FineTeX.Parser.Utils (Posed (Posed, getVal))
 import Test.Hspec (context, describe, it)
 import Test.Hspec.Megaparsec (failsLeaving, shouldFailOn, shouldParse, succeedsLeaving)
 import Text.Megaparsec (MonadParsec (getParserState), errorBundlePretty, mkPos, pos1, some)
@@ -66,9 +65,9 @@ defs = case runIdentity $ runParseT $ parseDefSource (\_ _ -> Identity $ Right (
 |]
 
 instance s ~ Text => IsString (Posed s) where
-  fromString str = Posed (T.pack str) undefined
+  fromString str = Posed undefined (T.pack str)
 
-instance IsString (WordOrSpace Posed) where
+instance IsString WordOrSpace where
   fromString str = ParWord (fromString str)
 
 run :: _ -> Parser _
@@ -227,7 +226,7 @@ spec = do
         [ it ("Empty " <> T.unpack aenv) $
             parse aenv `shouldParse` DocEnvironment env [] (body env)
           | env <- envs,
-            let aenv = "@" <> unBox env
+            let aenv = "@" <> getVal env
         ]
       it "Empty ArgEnv without argument" $
         parse `shouldFailOn` "@ArgEnv"
@@ -237,7 +236,7 @@ spec = do
         [ it ("Empty " <> T.unpack aenv <> " with eoln") $
             parse aenv `shouldParse` DocEnvironment env [] (body env)
           | env <- envs,
-            let aenv = "@" <> unBox env <> "\n"
+            let aenv = "@" <> getVal env <> "\n"
         ]
       it "Empty ArgEnv without argument with eoln" $
         parse `shouldFailOn` "@ArgEnv\n"
