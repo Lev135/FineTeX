@@ -12,7 +12,7 @@ module FineTeX.Processor.Definitions
 where
 
 import Control.Lens (At (at), Field1 (_1), Lens', anon, non, to, use, (%=), (<>=), (^.))
-import Control.Monad (forM_, when)
+import Control.Monad (forM_, unless, when)
 import Control.Monad.RWS (MonadState, MonadWriter (tell))
 import Data.Bifunctor (Bifunctor (..))
 import Data.Map (Map)
@@ -35,7 +35,7 @@ data ProcessDefsError
   = MultipleDecl DefType Text Pos Pos
   | UndefinedMode Text Pos
   | UndefinedSort Text Pos
-  | Dbg String
+  | UnknownIdentifier Text Pos
   deriving (Show)
 
 instance PrettyErr ProcessDefsError where
@@ -61,7 +61,9 @@ instance PrettyErr ProcessDefsError where
           [ "Undefined sort '" <> name <> "'",
             "Note: unlike other definitions, sort must be defined before used"
           ]
-  prettyErr _ (Dbg txt) = "dbg: " <> P.pretty txt
+  prettyErr src (UnknownIdentifier name p) = prettyPos src lbl p
+    where
+      lbl = "Unknown identifier '" <> name <> "'"
 
 data State p = State
   { _definitions :: Definitions p,
@@ -111,9 +113,29 @@ instance HasName (DefInline p) (p Text) where
 procDefInModeBlock ::
   forall m p. (PosC p, MState m p) => p Text -> DefInModeBlock p -> m ()
 procDefInModeBlock mode = \case
-  DefEnvBlock defs -> mapM_ (addInMode envs DefTEnv) defs
+  DefEnvBlock defs ->
+    mapM_
+      ( \def -> do
+          mapM_
+            (checkRuleTerm (def ^. args))
+            ((def ^. begin) <> (def ^. end))
+          addInMode envs DefTEnv def
+      )
+      defs
   DefRuleBlock defs -> mapM_ (procRuleDef mode) defs
-  DefPrefBlock defs -> mapM_ (addInMode prefs DefTPref) defs
+  DefPrefBlock defs ->
+    mapM_
+      ( \def -> do
+          mapM_
+            (checkRuleTerm (def ^. args))
+            ((def ^. pref) <> (def ^. suf) <> (def ^. sep))
+          mapM_
+            (checkRuleTerm [])
+            ((def ^. begin) <> (def ^. end))
+          checkMode (def ^. innerModeName)
+          addInMode prefs DefTPref def
+      )
+      defs
   DefInlBlock defs -> mapM_ (addInMode inlines DefTInl) defs
   where
     addInMode ::
@@ -123,6 +145,24 @@ procDefInModeBlock mode = \case
       (a p -> m ())
     addInMode lens deft = addDef (inModes . at (unBox mode) . anon (mempty <$ mode) null . h . lens) deft
     h g pa = sequenceBox $ g <$> pa
+
+checkRuleTerm :: (PosC p, MState m p) => [Argument p] -> RuleTerm p -> m ()
+checkRuleTerm args = \case
+  RTString _ -> pure ()
+  RTVar varName ->
+    unless (any (\Argument {_name} -> _name == varName) args) $
+      tell [UnknownIdentifier (unBox varName) (getPos varName)]
+  RTSpace -> pure ()
+  RTRun modeName terms -> do
+    maybe (pure ()) checkMode modeName
+    mapM_ (checkRuleTerm args) terms
+
+checkMode :: (PosC p, MState m p) => p Text -> m ()
+checkMode modeName = do
+  mode <- use (definitions . modes . at (unBox modeName))
+  case mode of
+    Just _ -> pure ()
+    Nothing -> tell [UndefinedMode (unBox modeName) (getPos modeName)]
 
 procSort :: DefSort p -> m ()
 procSort = undefined
