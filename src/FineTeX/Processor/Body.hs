@@ -5,7 +5,7 @@
 module FineTeX.Processor.Body where
 
 import Control.Lens (At (..), Ixed (..), non, to, view, (^.), (^?))
-import Control.Monad (join)
+import Control.Monad (join, (>=>))
 import Control.Monad.Extra (concatMapM)
 import Control.Monad.RWS (MonadReader, MonadState (get, put), MonadWriter (tell))
 import Data.List.Extra (intercalate, repeatedly)
@@ -53,16 +53,15 @@ deriving instance Box p => Show (Word' p)
 
 deriving instance (Show (word p), Box p) => Show (WordDocElement word p)
 
+-- | Process body in two stages:
+--
+-- 1. todo
+-- 2. todo
 processBody :: MonadM m p => [DocElement p] -> m [WordDocElement Word' p]
-processBody els = do
-  let gels = groupPrefs $ els
-  wels <- localState $ mapM elToWord gels
-  mapM elReplaceTokens wels
+processBody = bodyToWords >=> wordsToWords'
 
 bodyToWords :: MonadM m p => [DocElement p] -> m [WordDocElement Word p]
-bodyToWords els = do
-  let gels = groupPrefs $ els
-  localState $ mapM elToWord gels
+bodyToWords = (localState . mapM elToWord) . groupPrefs
 
 wordsToWords' :: MonadM m p => [WordDocElement Word p] -> m [WordDocElement Word' p]
 wordsToWords' = mapM elReplaceTokens
@@ -113,8 +112,8 @@ elToWord = \case
     let env = defs ^. envs . at (unBox name) . non (error "unexpected env")
         beg' = substArgs' (env ^. args) argvs (env ^. begin)
         end' = substArgs' (env ^. args) argvs (env ^. end)
-    state <- get
-    let mode = fromMaybe state $ env ^? inner . _NoVerb . innerModeName . to unBox
+    curMode <- get
+    let mode = fromMaybe curMode $ env ^? inner . _NoVerb . innerModeName . to unBox
     body' <- localState $ do
       put mode
       mapMEnvBody (mapM elToWord) body
